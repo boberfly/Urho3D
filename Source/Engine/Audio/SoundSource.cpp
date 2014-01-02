@@ -26,6 +26,9 @@
 #include "ResourceCache.h"
 #include "Sound.h"
 #include "SoundSource.h"
+#if defined(USE_OPENAL)
+#include "Log.h"
+#endif
 
 #include <cstring>
 
@@ -33,7 +36,7 @@
 
 namespace Urho3D
 {
-
+#if !defined( USE_OPENAL)
 #define INC_POS_LOOPED() \
     pos += intAdd; \
     fractPos += fractAdd; \
@@ -90,6 +93,16 @@ namespace Urho3D
 
 #define GET_IP_SAMPLE_RIGHT() (((((int)pos[3] - (int)pos[1]) * fractPos) / 65536) + (int)pos[1])
 
+#else
+
+#if defined(ENABLE_LOGGING)
+#define IF_AL_ERROR(message); if(!audio_->checkALError()){message;}
+#else
+#define IF_AL_ERROR(message);
+#endif
+
+#endif
+
 static const char* typeNames[] =
 {
     "Effect",
@@ -110,16 +123,35 @@ SoundSource::SoundSource(Context* context) :
     gain_(1.0f),
     attenuation_(1.0f),
     panning_(0.0f),
+    pitch_(1.0f),
     autoRemoveTimer_(0.0f),
     autoRemove_(false),
     position_(0),
+#if !defined(USE_OPENAL)
     fractPosition_(0),
+#endif
     timePosition_(0.0f),
     decoder_(0),
     decodePosition_(0)
 {
+
     audio_ = GetSubsystem<Audio>();
 
+#if defined(USE_OPENAL)
+    alGenSources(1, &alSource_);
+    IF_AL_ERROR(LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", alGenSources(1, &alSource_)"));
+
+    alSourcef(alSource_, AL_PITCH, pitch_);
+    alSourcef(alSource_, AL_VELOCITY, 10.0f );
+    alSourcef(alSource_, AL_GAIN, gain_);
+    alSourcef(alSource_, AL_ROLLOFF_FACTOR, attenuation_); // Is this correct?
+    alSource3f(alSource_, AL_POSITION, panning_, 0.0f, 0.0f); // Is this correct?
+    alSourcef(alSource_, AL_SEC_OFFSET, timePosition_);
+    alSourcef(alSource_, AL_MIN_GAIN, 0.0f);
+    alSourcef(alSource_, AL_MAX_GAIN, 1.0f);
+    alSourcei(alSource_, AL_SOURCE_RELATIVE, AL_TRUE); // 2D sound (will cancel out 3D)
+#endif
+    
     if (audio_)
         audio_->AddSoundSource(this);
 }
@@ -130,6 +162,11 @@ SoundSource::~SoundSource()
         audio_->RemoveSoundSource(this);
 
     FreeDecoder();
+
+#if defined(USE_OPENAL)
+    alSourceStop(alSource_);
+    alDeleteSources(1, &alSource_);
+#endif
 }
 
 void SoundSource::RegisterObject(Context* context)
@@ -145,6 +182,7 @@ void SoundSource::RegisterObject(Context* context)
     ATTRIBUTE(SoundSource, VAR_FLOAT, "Panning", panning_, 0.0f, AM_DEFAULT);
     ACCESSOR_ATTRIBUTE(SoundSource, VAR_BOOL, "Is Playing", IsPlaying, SetPlayingAttr, bool, false, AM_DEFAULT);
     ATTRIBUTE(SoundSource, VAR_BOOL, "Autoremove on Stop", autoRemove_, false, AM_FILE);
+    ACCESSOR_ATTRIBUTE(SoundSource, VAR_RESOURCEREF, "Sound", GetSoundAttr, SetSoundAttr, ResourceRef, ResourceRef(Sound::GetTypeStatic()), AM_DEFAULT);
     ACCESSOR_ATTRIBUTE(SoundSource, VAR_INT, "Play Position", GetPositionAttr, SetPositionAttr, int, 0, AM_FILE);
 }
 
@@ -156,7 +194,10 @@ void SoundSource::Play(Sound* sound)
     // If no frequency set yet, set from the sound's default
     if (frequency_ == 0.0f && sound)
         SetFrequency(sound->GetFrequency());
-
+    
+    #if defined(USE_OPENAL)
+    PlayOpenAL(sound);
+    #else
     // If sound source is currently playing, have to lock the audio mutex
     if (position_)
     {
@@ -165,7 +206,8 @@ void SoundSource::Play(Sound* sound)
     }
     else
         PlayLockless(sound);
-
+    #endif
+    
     MarkNetworkUpdate();
 }
 
@@ -194,7 +236,12 @@ void SoundSource::Stop()
 {
     if (!audio_)
         return;
-
+    #if defined(USE_OPENAL)
+    alSourceStop(alSource_);
+    position_ = 0;
+    timePosition_ = 0.0f;
+    alSourcei(alSource_, AL_BUFFER, 0);
+    #else
     // If sound source is currently playing, have to lock the audio mutex
     if (position_)
     {
@@ -204,7 +251,8 @@ void SoundSource::Stop()
 
     // Free the compressed sound decoder now if any
     FreeDecoder();
-
+    #endif
+    
     MarkNetworkUpdate();
 }
 
@@ -220,6 +268,7 @@ void SoundSource::SetSoundType(SoundType type)
 void SoundSource::SetFrequency(float frequency)
 {
     frequency_ = Clamp(frequency, 0.0f, 535232.0f);
+
     MarkNetworkUpdate();
 }
 
@@ -241,6 +290,12 @@ void SoundSource::SetPanning(float panning)
     MarkNetworkUpdate();
 }
 
+void SoundSource::SetPitch(float pitch)
+{
+    pitch_ = Clamp(pitch, 0.0f, 2.0f);
+    MarkNetworkUpdate();
+}
+
 void SoundSource::SetAutoRemove(bool enable)
 {
     autoRemove_ = enable;
@@ -248,9 +303,17 @@ void SoundSource::SetAutoRemove(bool enable)
 
 bool SoundSource::IsPlaying() const
 {
+#if defined(USE_OPENAL)
+    int state;
+    alGetSourcei(alSource_, AL_SOURCE_STATE, &state );
+
+    return state == AL_PLAYING;
+#else
     return sound_ != 0 && position_ != 0;
+#endif
 }
 
+#if !defined (USE_OPENAL)
 void SoundSource::SetPlayPosition(signed char* pos)
 {
     if (!audio_ || !sound_)
@@ -332,19 +395,223 @@ void SoundSource::SetPlayPositionLockless(signed char* pos)
     timePosition_ = ((float)(int)(size_t)(pos - sound_->GetStart())) / (sound_->GetSampleSize() * sound_->GetFrequency());
 }
 
+#else // USE_OPENAL
+
+void SoundSource::PlayOpenAL(Sound* sound)
+{
+    if (sound)
+    {
+        if (!sound->IsCompressed())
+        {
+            if (sound == sound_)
+            {
+                if (!IsPlaying())
+                {
+                    alSourcei(alSource_, AL_BUFFER, sound->GetALBuffer());
+                    alSourcePlay(alSource_);
+                    IF_AL_ERROR(LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot play alSource"));
+                }
+                return;
+            }
+            else
+            {
+            	// Stop the current sound
+            	Stop();
+                // Free Decoder in case previous sound was compressed
+                FreeDecoder();
+                // Load in buffer
+                alSourcei(alSource_, AL_BUFFER, sound->GetALBuffer());
+                IF_AL_ERROR(LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot set alSource to AL_BUFFER"));
+
+                // Set OpenAL buffer and if it's looping or not
+                // (need to use the member directly otherwise iOS won't get the value from ->IsLooped())
+                alSourcei(alSource_, AL_LOOPING, sound->looped_);
+                // Set proper volume
+                float soundTypeGain = audio_->GetMasterGain(soundType_);
+                alSourcef(alSource_, AL_GAIN, gain_ * soundTypeGain);
+                // Set OpenAL source Attributes
+                alSourcef(alSource_, AL_ROLLOFF_FACTOR, attenuation_);
+                alSource3f(alSource_, AL_POSITION, panning_, 0.0f, 0.0f);
+                alSourcef(alSource_, AL_PITCH, pitch_);
+
+                sound_ = sound;
+                position_ = 0;
+
+                alSourcePlay(alSource_);
+                IF_AL_ERROR(LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot play alSource"));
+                return;
+            }
+        }
+        else
+        {
+            // Compressed sound start
+            if (sound == sound_)
+            {
+                // We stop the existing compressed sound
+            	Stop();
+                // If same compressed sound is already playing, rewind the Decoder
+                sound_->RewindDecoder(decoder_);
+                //alSourceQueueBuffers(alSource_, 2, sound_->GetALBuffer());
+                alSourcePlay(alSource_);
+                IF_AL_ERROR(LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot play alSource"));
+                return;
+            }
+            else
+            {
+                // We stop the existing compressed sound
+            	Stop();
+                FreeDecoder(); // This will alSourceUnqueueBuffers
+
+                // Streaming audio is never looped at the AL-level
+                alSourcei(alSource_, AL_LOOPING, AL_FALSE );
+                // Set proper volume
+                float soundTypeGain = audio_->GetMasterGain(soundType_);
+                alSourcef(alSource_, AL_GAIN, gain_ * soundTypeGain);
+
+                // Set OpenAL source Attributes
+                alSourcef(alSource_, AL_ROLLOFF_FACTOR, attenuation_);
+                alSource3f(alSource_, AL_POSITION, panning_, 0.0f, 0.0f);
+
+                sound_ = sound;
+                position_ = 0;
+
+                // Source Queue the buffers
+                alSourceQueueBuffers(alSource_, 2, sound_->GetALBufferPointer());
+                IF_AL_ERROR(LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot queue new buffer"));
+                // Setup the decoder and decode buffer
+                decoder_ = sound_->AllocateDecoder();
+                unsigned sampleSize = sound_->GetSampleSize();
+                unsigned DecodeBufferSize = sampleSize * sound_->GetIntFrequency() * DECODE_BUFFER_LENGTH / 1000;
+                sound_->DecodeOpenAL(decoder_, sound_->GetALBuffer(), DecodeBufferSize);
+                
+                // Start playing the decode buffer
+                alSourcePlay(alSource_);
+                IF_AL_ERROR(LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot play streaming alSource"));
+                return;
+            }
+        }
+    }
+    
+    // If sound pointer is null or if sound has no data, stop playback
+    FreeDecoder();
+    sound_.Reset();
+    position_ = 0;
+    timePosition_ = 0;
+}
+
+void SoundSource::SetPlayPositionOpenAL(int pos)
+{
+    // Setting position on a compressed sound is not supported
+    if (!sound_ || sound_->IsCompressed())
+        return;
+    
+    // If the sound is playing, stop it first
+    if(IsPlaying())
+        Stop();
+
+    // Set offset
+    alSourcei(alSource_, AL_BYTE_OFFSET, pos);
+
+    // Get offset and update position_ and timePosition_
+    ALint position = 0;
+    ALfloat timePosition = 0.0f;
+    alGetSourcei(alSource_, AL_BYTE_OFFSET, &position);
+    alGetSourcef(alSource_, AL_SEC_OFFSET, &timePosition);
+
+    position_ = position;
+    timePosition_ = timePosition;
+
+    // Play the sound again
+    PlayOpenAL(sound_);
+}
+
+void SoundSource::UpdateOpenAL(float timeStep)
+{
+    alListener3f(AL_POSITION, 0.0f, 0.0f, 0.0f);
+    alSource3f(alSource_, AL_POSITION, panning_, 0.0f, 0.0f);
+
+    float soundTypeGain = audio_->GetMasterGain(soundType_);
+    alSourcef(alSource_, AL_GAIN, gain_ * soundTypeGain);
+
+    // Update position_ and timePosition_ from OpenAL
+    ALint position = 0;
+    ALfloat timePosition = 0.0f;
+    // Get position data
+    alGetSourcei(alSource_, AL_BYTE_OFFSET, &position);
+    IF_AL_ERROR(LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", error getting AL_BYTE_OFFSET from alSource"));
+    alGetSourcef(alSource_, AL_SEC_OFFSET, &timePosition);
+    IF_AL_ERROR(LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", error getting AL_SEC_OFFSET from alSource"));
+
+    position_ = position;
+    timePosition_ = timePosition;
+
+    if(sound_)
+    {
+        if (sound_->IsCompressed())
+        {
+            if (!StreamOpenAL(timeStep))
+            	LOGERROR("Cannot stream " + sound_->GetName());
+        }
+        else
+            // Need to use the member directly otherwise iOS won't pick up the value.
+            alSourcei(alSource_, AL_LOOPING, sound_->looped_);
+    }
+}
+
+bool SoundSource::StreamOpenAL(float timeStep)
+{
+    int processed;
+    bool active = true;
+
+    alGetSourcei(alSource_, AL_BUFFERS_PROCESSED, &processed);
+
+    while(processed--)
+    {
+        ALuint buffer;
+
+        unsigned sampleSize = sound_->GetSampleSize();
+        unsigned DecodeBufferSize = sampleSize * sound_->GetIntFrequency() * DECODE_BUFFER_LENGTH / 1000;
+        
+        alSourceUnqueueBuffers(alSource_, 1, &buffer);
+        IF_AL_ERROR(LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot unqueue buffer."));
+
+        active = sound_->DecodeOpenAL(decoder_, buffer, DecodeBufferSize);
+
+        if (!active && sound_->IsLooped())
+        {
+            sound_->RewindDecoder(decoder_);
+            timePosition_ = 0.0f;
+            position_ = 0;
+            active = sound_->DecodeOpenAL(decoder_, buffer, DecodeBufferSize);
+        }
+        else
+        	return false;
+
+        alSourceQueueBuffers(alSource_, 1, &buffer);
+        IF_AL_ERROR(LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot queue buffer."));
+    }
+
+    return (bool)active;
+}
+#endif  // USE_OPENAL
+
 void SoundSource::Update(float timeStep)
 {
     if (!audio_ || !IsEnabledEffective())
         return;
-
+#if defined(USE_OPENAL)
+    UpdateOpenAL(timeStep);
+#endif
     // If there is no actual audio output, perform fake mixing into a nonexistent buffer to check stopping/looping
     if (!audio_->IsInitialized())
         MixNull(timeStep);
 
     // Free the decoder if playback has stopped
+#if !defined(USE_OPENAL)
     if (!position_ && decoder_)
         FreeDecoder();
-
+#endif
+    
     // Check for autoremove
     if (autoRemove_)
     {
@@ -363,6 +630,7 @@ void SoundSource::Update(float timeStep)
     }
 }
 
+#if !defined (USE_OPENAL)
 void SoundSource::Mix(int* dest, unsigned samples, int mixRate, bool stereo, bool interpolation)
 {
     if (!position_ || !sound_ || !IsEnabledEffective())
@@ -491,6 +759,7 @@ void SoundSource::Mix(int* dest, unsigned samples, int mixRate, bool stereo, boo
     else
         timePosition_ += ((float)samples / (float)mixRate) * frequency_ / sound_->GetFrequency();
 }
+#endif // !defined (USE_OPENAL)
 
 void SoundSource::SetSoundAttr(ResourceRef value)
 {
@@ -520,7 +789,13 @@ void SoundSource::SetPlayingAttr(bool value)
 void SoundSource::SetPositionAttr(int value)
 {
     if (sound_)
+    {
+        #if defined(USE_OPENAL)
+        SetPlayPositionOpenAL(value);
+        #else
         SetPlayPosition(sound_->GetStart() + value);
+        #endif
+    }
 }
 
 ResourceRef SoundSource::GetSoundAttr() const
@@ -531,11 +806,15 @@ ResourceRef SoundSource::GetSoundAttr() const
 int SoundSource::GetPositionAttr() const
 {
     if (sound_ && position_)
+        #if defined(USE_OPENAL)
+        return GetPlayPosition();
+        #else
         return (int)(GetPlayPosition() - sound_->GetStart());
+        #endif
     else
         return 0;
 }
-
+#if !defined(USE_OPENAL)
 void SoundSource::MixMonoToMono(Sound* sound, int* dest, unsigned samples, int mixRate)
 {
     float totalGain = audio_->GetSoundSourceMasterGain(soundType_) * attenuation_ * gain_;
@@ -1194,6 +1473,7 @@ void SoundSource::MixZeroVolume(Sound* sound, unsigned samples, int mixRate)
             position_ = 0;
     }
 }
+#endif // !defined(USE_OPENAL)
 
 void SoundSource::MixNull(float timeStep)
 {
@@ -1227,7 +1507,20 @@ void SoundSource::FreeDecoder()
         decoder_ = 0;
     }
 
+    #if defined(USE_OPENAL)
+    if(sound_)
+    {
+        if (sound_->IsCompressed())
+        {
+            alSourceUnqueueBuffers(alSource_, 2, sound_->GetALBufferPointer());
+            IF_AL_ERROR(LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot unqueue buffer."));
+        }
+    }
+    else
+        alSourcei(alSource_, AL_BUFFER, 0);
+    #else
     decodeBuffer_.Reset();
+    #endif
 }
 
 }

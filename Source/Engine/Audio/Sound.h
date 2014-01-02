@@ -25,6 +25,17 @@
 #include "ArrayPtr.h"
 #include "Resource.h"
 
+#if defined(USE_OPENAL)
+#include "Audio.h" // for checking AL errors
+#if defined(IOS)
+#include <OpenAL/al.h>
+#include <OpenAL/alc.h>
+#else
+#include <AL/al.h>
+#include <AL/alc.h>
+#endif
+#endif
+
 namespace Urho3D
 {
 
@@ -54,19 +65,28 @@ public:
     void SetSize(unsigned dataSize);
     /// Set uncompressed sound data.
     void SetData(const void* data, unsigned dataSize);
+    /// Update OpenAL Buffer (for dynamic updates of audio).
+    void UploadBufferToAL(const void* data, unsigned dataSize);
     /// Set uncompressed sound data format.
     void SetFormat(unsigned frequency, bool sixteenBit, bool stereo);
     /// Set loop on/off. If loop is enabled, sets the full sound as loop range.
     void SetLooped(bool enable);
     /// Define loop.
     void SetLoop(unsigned repeatOffset, unsigned endOffset);
+    #if !defined(USE_OPENAL)
     /// Fix interpolation by copying data from loop start to loop end (looped), or adding silence (oneshot.)
     void FixInterpolation();
+    #endif
     
     /// Create and return a compressed audio decoder instance. Return null if fails.
     void* AllocateDecoder();
+    #if defined(USE_OPENAL)
+    /// Decode compressed audio data into OpenAL Buffer
+    unsigned DecodeOpenAL(void* decoder, ALuint buffer, unsigned bytes);
+    #else
     /// Decode compressed audio data. Return number of actually decoded bytes.
     unsigned Decode(void* decoder, signed char* dest, unsigned bytes);
+    #endif
     /// Rewind the decoder to beginning of audio data.
     void RewindDecoder(void* decoder);
     /// Free the decoder instance.
@@ -96,6 +116,14 @@ public:
     bool IsStereo() const { return stereo_; }
     /// Return whether is compressed in Ogg Vorbis format.
     bool IsCompressed() const { return compressed_; }
+    #if defined(USE_OPENAL)
+    /// Return the OpenAL Buffer
+    ALuint GetALBuffer() const { return alBuffer_; }
+    /// Return the OpenAL Pointer
+    ALuint* GetALBufferPointer() { return &alBuffer_; }
+    /// Looped
+    bool looped_;
+    #endif
     
 private:
     /// Load optional parameters from an XML file.
@@ -103,6 +131,12 @@ private:
     
     /// Sound data.
     SharedArrayPtr<signed char> data_;
+    #if defined(USE_OPENAL)
+    /// OpenAL Buffer.
+    ALuint alBuffer_;
+    /// For OpenAL error checking
+    //WeakPtr<Audio> audio_;
+    #endif
     /// Loop start.
     signed char* repeat_;
     /// Sound data end.
@@ -111,8 +145,10 @@ private:
     unsigned dataSize_;
     /// Default frequency.
     unsigned frequency_;
+#if !defined(USE_OPENAL)
     /// Looped flag.
     bool looped_;
+#endif
     /// Sixteen bit flag.
     bool sixteenBit_;
     /// Stereo flag.
@@ -121,6 +157,12 @@ private:
     bool compressed_;
     /// Compressed sound length.
     float compressedLength_;
+    #if defined(USE_OPENAL)
+    /// Samples length.
+    unsigned samplesLength_;
+    /// Samples remaining.
+    unsigned samplesRemaining_;
+    #endif
 };
 
 }

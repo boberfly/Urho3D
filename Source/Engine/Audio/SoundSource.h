@@ -25,6 +25,14 @@
 #include "AudioDefs.h"
 #include "Component.h"
 
+#if defined(USE_OPENAL)
+#if IOS
+#include <OpenAL/AL.h>
+#else
+#include <AL/al.h>
+#endif
+#endif
+
 namespace Urho3D
 {
 
@@ -67,15 +75,24 @@ public:
     void SetAttenuation(float attenuation);
     /// Set stereo panning. -1.0 is full left and 1.0 is full right.
     void SetPanning(float panning);
+    /// Set Pitch. 1.0 is unaltered. 0.0f is silent, 1.0 is normal, 2.0 is turbo-chipmunk.
+    void SetPitch(float pitch);
    /// Set whether sound source will be automatically removed from the scene node when playback stops.
     void SetAutoRemove(bool enable);
+    #if !defined(USE_OPENAL)
     /// Set new playback position.
     void SetPlayPosition(signed char* pos);
+    #endif
     
     /// Return sound.
     Sound* GetSound() const { return sound_; }
+    #if !defined(USE_OPENAL)
     /// Return playback position.
     volatile signed char* GetPlayPosition() const { return position_; }
+    #else
+    /// Return playback position.
+    int GetPlayPosition() const { return position_; }
+    #endif
     /// Return sound type, determines the master gain group.
     SoundType GetSoundType() const { return soundType_; }
     /// Return playback time position.
@@ -88,21 +105,36 @@ public:
     float GetAttenuation() const { return attenuation_; }
     /// Return stereo panning.
     float GetPanning() const { return panning_; }
+    /// Return pitch.
+    float GetPitch() const { return pitch_; }
     /// Return autoremove mode.
     bool GetAutoRemove() const { return autoRemove_; }
     /// Return whether is playing.
     bool IsPlaying() const;
     
+    #if !defined(USE_OPENAL)
     /// Play a sound without locking the audio mutex. Called internally.
     void PlayLockless(Sound* sound);
     /// Stop sound without locking the audio mutex. Called internally.
     void StopLockless();
     /// Set new playback position without locking the audio mutex. Called internally.
     void SetPlayPositionLockless(signed char* position);
+    #else
+    /// Play OpenAL Source.
+    void PlayOpenAL(Sound* sound);
+    /// Set new playback position on OpenAL Source.
+    void SetPlayPositionOpenAL(int position);
+    /// Update OpenAL state
+    void UpdateOpenAL(float timeStep);
+    /// Stream Decoder data to OpenAL, return samples remaining
+    bool StreamOpenAL(float timeStep);
+    #endif
     /// Update the sound source. Perform subclass specific operations. Called by Audio.
     virtual void Update(float timeStep);
+    #if !defined(USE_OPENAL)
     /// Mix sound source output to a 32-bit clipping buffer. Called by Audio.
     void Mix(int* dest, unsigned samples, int mixRate, bool stereo, bool interpolation);
+    #endif
     
     /// Set sound attribute.
     void SetSoundAttr(ResourceRef value);
@@ -128,12 +160,19 @@ protected:
     float attenuation_;
     /// Stereo panning.
     float panning_;
+    /// Pitch.
+    float pitch_;
     /// Autoremove timer.
     float autoRemoveTimer_;
     /// Autoremove flag.
     bool autoRemove_;
+    #if defined(USE_OPENAL)
+    /// OpenAL Source
+    ALuint alSource_;
+    #endif
     
 private:
+    #if !defined(USE_OPENAL)
     /// Mix mono sample to mono buffer.
     void MixMonoToMono(Sound* sound, int* dest, unsigned samples, int mixRate);
     /// Mix mono sample to stereo buffer.
@@ -152,6 +191,7 @@ private:
     void MixStereoToStereoIP(Sound* sound, int* dest, unsigned samples, int mixRate);
     /// Advance playback pointer without producing audible output.
     void MixZeroVolume(Sound* sound, unsigned samples, int mixRate);
+    #endif
     /// Advance playback pointer to simulate audio playback in headless mode.
     void MixNull(float timeStep);
     /// Free the decoder if any.
@@ -159,12 +199,18 @@ private:
     
     /// Sound.
     SharedPtr<Sound> sound_;
+    #if !defined(USE_OPENAL)
     /// Playback position.
     volatile signed char *position_;
     /// Playback fractional position.
     volatile int fractPosition_;
     /// Playback time position.
     volatile float timePosition_;
+    #else
+    int position_;
+    /// Playback time position.
+    float timePosition_;
+    #endif
     /// Ogg Vorbis decoder.
     void* decoder_;
     /// Decode buffer.

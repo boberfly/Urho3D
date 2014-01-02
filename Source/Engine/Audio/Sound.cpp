@@ -57,6 +57,8 @@ struct WavHeader
 
 static const unsigned IP_SAFETY = 4;
 
+OBJECTTYPESTATIC(Sound);
+
 Sound::Sound(Context* context) :
     Resource(context),
     repeat_(0),
@@ -67,12 +69,31 @@ Sound::Sound(Context* context) :
     sixteenBit_(false),
     stereo_(false),
     compressed_(false),
+#if defined(USE_OPENAL)
+    samplesLength_(0),
+    samplesRemaining_(0),
+#endif
     compressedLength_(0.0f)
 {
+    #if defined(USE_OPENAL)
+	//alGenBuffers( 1, &alBuffer_ ); // deferred, we might need 2 buffers
+    //audio_ = GetSubsystem<Audio>();
+    #endif
 }
 
 Sound::~Sound()
 {
+    #if defined(USE_OPENAL)
+    if(alBuffer_)
+    {
+	    alDeleteBuffers( compressed_ ? 2 : 1, &alBuffer_ );
+        //if(audio_)
+        //{
+        //    if (!audio_->checkALCError())
+        //        LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot delete buffers for "+GetName());
+        //}
+    }
+    #endif
 }
 
 void Sound::RegisterObject(Context* context)
@@ -117,6 +138,10 @@ bool Sound::LoadOggVorbis(Deserializer& source)
     // Store length, frequency and stereo flag
     stb_vorbis_info info = stb_vorbis_get_info(vorbis);
     compressedLength_ = stb_vorbis_stream_length_in_seconds(vorbis);
+    #if defined(USE_OPENAL)
+    samplesLength_ = stb_vorbis_stream_length_in_samples(vorbis) * info.channels;
+    samplesRemaining_ = samplesLength_; // For OpenAL streaming
+    #endif
     frequency_ = info.sample_rate;
     stereo_ = info.channels > 1;
     stb_vorbis_close(vorbis);
@@ -125,6 +150,16 @@ bool Sound::LoadOggVorbis(Deserializer& source)
     dataSize_ = dataSize;
     sixteenBit_ = true;
     compressed_ = true;
+
+    #if defined(USE_OPENAL)
+    alGenBuffers(2, &alBuffer_); // 2 = front and back-buffer as we will stream
+
+    //if (audio_)
+    //{
+    //    if (!audio_->checkALCError())
+    //        LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot allocate buffers for "+GetName()+" from sound file "+source.GetName());
+    //}
+    #endif
     
     SetMemoryUse(dataSize);
     return true;
@@ -208,7 +243,74 @@ bool Sound::LoadWav(Deserializer& source)
         for (unsigned i = 0; i < length; ++i)
             data_[i] -= 128;
     }
-    
+
+    #if defined(USE_OPENAL)
+    ALenum format = 0;
+
+    if( header.bits_ == 8 )
+	{
+        switch( header.channels_ )
+        {
+        case 1:
+            format = AL_FORMAT_MONO8;
+            break;
+        case 2:
+            format = AL_FORMAT_STEREO8;
+            break;
+        case 4:
+            format = alGetEnumValue( "AL_FORMAT_QUAD8" );
+            break;
+        case 6:
+            format = alGetEnumValue( "AL_FORMAT_51CHN8" );
+            break;
+        case 7:
+            format = alGetEnumValue( "AL_FORMAT_61CHN8" );
+            break;
+        case 8:
+            format = alGetEnumValue( "AL_FORMAT_71CHN8" );
+            break;
+        }
+    }
+    else if( header.bits_ == 16 )
+    {
+        switch( header.channels_ )
+        {
+        case 1:
+            format = AL_FORMAT_MONO16;
+            break;
+        case 2:
+            format = AL_FORMAT_STEREO16;
+            break;
+        case 4:
+            format = alGetEnumValue( "AL_FORMAT_QUAD16" );
+            break;
+        case 6:
+            format = alGetEnumValue( "AL_FORMAT_51CHN16" );
+            break;
+        case 7:
+            format = alGetEnumValue( "AL_FORMAT_61CHN16" );
+            break;
+        case 8:
+            format = alGetEnumValue( "AL_FORMAT_71CHN16" );
+            break;
+        }
+    }
+    alGenBuffers( 1, &alBuffer_ );
+    /*if (audio_)
+    {
+        if (!audio_->checkALCError())
+            LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot allocate buffers for "+GetName()+" from sound file "+source.GetName());
+    }*/
+    alBufferData(alBuffer_, format, data_.Get(), (ALsizei)length, (ALsizei)header.frequency_);
+
+    /*if (audio_)
+    {
+        if (!audio_->checkALCError())
+            LOGERROR("OpenAL Error: "+audio_->GetErrorAL()+", cannot upload buffer for "+GetName()+" from sound file "+source.GetName());
+    }*/
+    data_.Reset();
+    #endif
+
     return true;
 }
 
@@ -241,6 +343,24 @@ void Sound::SetData(const void* data, unsigned dataSize)
     memcpy(data_.Get(), data, dataSize);
 }
 
+void Sound::UploadBufferToAL(const void* data, unsigned dataSize)
+{
+    if (!dataSize)
+        return;
+    if (alBuffer_)
+    {
+        alDeleteBuffers(1, &alBuffer_);
+        if (alGetError() != AL_NO_ERROR)
+            LOGERROR("ERROR DELETING BUFFER.");
+    }
+    alGenBuffers(1, &alBuffer_);
+    if (alGetError() != AL_NO_ERROR)
+        LOGERROR("ERROR GENNING BUFFER.");
+    alBufferData(alBuffer_, stereo_ ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16, data, (ALsizei)dataSize, (ALsizei)frequency_);
+    if (alGetError() != AL_NO_ERROR)
+        LOGERROR("ERROR UPLOADING BUFFER.");
+}
+
 void Sound::SetFormat(unsigned frequency, bool sixteenBit, bool stereo)
 {
     frequency_ = frequency;
@@ -251,6 +371,9 @@ void Sound::SetFormat(unsigned frequency, bool sixteenBit, bool stereo)
 
 void Sound::SetLooped(bool enable)
 {
+#if defined(USE_OPENAL)
+    looped_ = enable;
+#else
     if (enable)
         SetLoop(0, dataSize_);
     else
@@ -265,10 +388,12 @@ void Sound::SetLooped(bool enable)
         else
             looped_ = false;
     }
+#endif
 }
 
 void Sound::SetLoop(unsigned repeatOffset, unsigned endOffset)
 {
+#if !defined(USE_OPENAL)
     if (!compressed_)
     {
         if (repeatOffset > dataSize_)
@@ -288,9 +413,11 @@ void Sound::SetLoop(unsigned repeatOffset, unsigned endOffset)
         FixInterpolation();
     }
     else
+#endif
         looped_ = true;
 }
 
+#if !defined(USE_OPENAL)
 void Sound::FixInterpolation()
 {
     if (!data_)
@@ -308,6 +435,7 @@ void Sound::FixInterpolation()
             end_[i] = 0;
     }
 }
+#endif
 
 void* Sound::AllocateDecoder()
 {
@@ -319,6 +447,44 @@ void* Sound::AllocateDecoder()
     return vorbis;
 }
 
+#if defined(USE_OPENAL)
+unsigned Sound::DecodeOpenAL(void* decoder, ALuint buffer, unsigned bytes)
+{
+    if (!decoder)
+        return 0;
+
+    ALenum format = 0;
+    format = stereo_ ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
+    ALshort dest[bytes];
+    int  size = 0;
+    int  result = 0;
+    unsigned soundSources = stereo_ ? 2 : 1;
+
+    stb_vorbis* vorbis = static_cast<stb_vorbis*>(decoder);
+
+    while(size < bytes)
+    {
+        unsigned outSamples = stb_vorbis_get_samples_short_interleaved(vorbis, soundSources, dest + size, bytes - size);
+        if(outSamples > 0)
+            size += outSamples * soundSources;
+        else
+            break;
+    }
+
+    if(size == 0)
+        return 0;
+
+    alBufferData(buffer, format, dest, size*sizeof(ALshort), (ALsizei)GetIntFrequency());
+
+    //if(audio_)
+    //{
+    //    if (!audio_->checkALError())
+    //        LOGERROR("OpenAL Error (SoundClass): "+audio_->GetErrorAL()+", cannot put streamed data in "+GetName());
+    //}
+
+    return samplesRemaining_ -= size;
+}
+#else
 unsigned Sound::Decode(void* decoder, signed char* dest, unsigned bytes)
 {
     if (!decoder)
@@ -329,6 +495,7 @@ unsigned Sound::Decode(void* decoder, signed char* dest, unsigned bytes)
     unsigned outSamples = stb_vorbis_get_samples_short_interleaved(vorbis, soundSources, (short*)dest, bytes >> 1);
     return (outSamples * soundSources) << 1;
 }
+#endif
 
 void Sound::RewindDecoder(void* decoder)
 {
@@ -337,6 +504,9 @@ void Sound::RewindDecoder(void* decoder)
     
     stb_vorbis* vorbis = static_cast<stb_vorbis*>(decoder);
     stb_vorbis_seek_start(vorbis);
+    #if defined(USE_OPENAL)
+    samplesRemaining_ = samplesLength_;
+    #endif
 }
 
 void Sound::FreeDecoder(void* decoder)

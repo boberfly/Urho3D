@@ -154,8 +154,31 @@ void SoundSource3D::DrawDebugGeometry(DebugRenderer* debug, bool depthTest)
 
 void SoundSource3D::Update(float timeStep)
 {
+    #if !defined(USE_OPENAL)
     CalculateAttenuation();
+    #endif
     SoundSource::Update(timeStep);
+
+    // This goes after the SoundSource Update so that we can override the fake 2D stuff
+    #if defined(USE_OPENAL)
+    SoundListener* listener = audio_->GetListener();
+	alSourcef(alSource_, AL_REFERENCE_DISTANCE, nearDistance_);
+	alSourcef(alSource_, AL_MAX_DISTANCE, farDistance_);
+	alSourcef(alSource_, AL_ROLLOFF_FACTOR, rolloffFactor_);
+    alSourcei(alSource_, AL_SOURCE_RELATIVE, AL_FALSE); // Disable this to get 3D spacial back
+
+    // Listener must either be sceneless or in the same scene, else set sound gain to 0
+    if (listener && listener->GetNode() && (!listener->GetScene() || listener->GetScene() == GetScene()))
+    {
+        Node* listenerNode = listener->GetNode();
+        Vector3 listenPos(listenerNode->GetWorldPosition());
+        Vector3 nodePos(node_->GetWorldPosition());
+        alListener3f(AL_POSITION, listenPos.x_, listenPos.y_, listenPos.z_);
+        alSource3f(alSource_, AL_POSITION, nodePos.x_, nodePos.y_, nodePos.z_);
+    }
+    else
+        alSourcef(alSource_, AL_MAX_DISTANCE, 0); // I think this would kill off sound...?
+    #endif
 }
 
 void SoundSource3D::SetDistanceAttenuation(float nearDistance, float farDistance, float rolloffFactor)
@@ -203,6 +226,7 @@ void SoundSource3D::SetRolloffFactor(float factor)
     MarkNetworkUpdate();
 }
 
+#if !defined(USE_OPENAL)
 void SoundSource3D::CalculateAttenuation()
 {
     if (!audio_)
@@ -259,5 +283,6 @@ void SoundSource3D::CalculateAttenuation()
     else
         attenuation_ = 0.0f;
 }
+#endif
 
 }

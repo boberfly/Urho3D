@@ -27,6 +27,16 @@
 #include "Mutex.h"
 #include "Object.h"
 
+#if defined(USE_OPENAL)
+#if defined(IOS)
+#include <OpenAL/al.h>
+#include <OpenAL/alc.h>
+#else
+#include <AL/al.h>
+#include <AL/alc.h>
+#endif
+#endif
+
 namespace Urho3D
 {
 
@@ -77,6 +87,8 @@ public:
     float GetMasterGain(SoundType type) const;
     /// Return active sound listener.
     SoundListener* GetListener() const;
+    /// Return output level.
+    float GetOutputLevel() const { return outputLevel_; }
     /// Return all sound sources.
     const PODVector<SoundSource*>& GetSoundSources() const { return soundSources_; }
 
@@ -89,9 +101,36 @@ public:
     /// Return sound type specific gain multiplied by master gain.
     float GetSoundSourceMasterGain(SoundType type) const { return masterGain_[SOUND_MASTER] * masterGain_[type]; }
 
+    /// Initialize sound capture with specified buffer length and output mode.
+    bool SetCaptureMode(int bufferLengthMSec, int mixRate, bool stereo);
+    /// Start Capturing.
+    void StartCapture();
+    /// Capture data into buffer.
+    void CaptureToBuffer();
+    /// Check to see if currently capturing.
+    bool IsCapturing() const { return capturing_; }
+    /// Stop Capturing and upload result to a Sound object.
+    void StopCapture();
+    /// Get Capture Sound.
+    Sound* GetCaptureSound() const { return captureSound_; }
+    /// Returns the capture level.
+    float GetCaptureLevel() const { return captureLevel_; }
+
+#if !defined(USE_OPENAL)    
     /// Mix sound sources into the buffer.
     void MixOutput(void *dest, unsigned samples);
-
+#endif
+#if defined(USE_OPENAL)
+    /// OpenAL Error checker (ALC).
+    bool checkALCError();
+    /// OpenAL Error checker (AL).
+    bool checkALError();
+    /// Get OpenAL Error (ALC).
+    const String& GetErrorALC() const { return lastErrorALC_; }
+    /// Get OpenAL Error (AL).
+    const String& GetErrorAL() const { return lastErrorAL_; }
+#endif
+    
 private:
     /// Handle render update event.
     void HandleRenderUpdate(StringHash eventType, VariantMap& eventData);
@@ -102,6 +141,20 @@ private:
     SharedArrayPtr<int> clipBuffer_;
     /// Audio thread mutex.
     Mutex audioMutex_;
+#if defined(USE_OPENAL)
+    /// OpenAL Device.
+    ALCdevice* alDevice_;
+    /// OpenAL Context.
+    ALCcontext* alContext_;
+
+    /// OpenAL Last error message (ALC).
+    String lastErrorALC_;
+    /// OpenAL Last error message (AL).
+    String lastErrorAL_;
+
+    /// OpenAL Capture Device.
+    ALCdevice* alCaptureDevice_;
+#endif
     /// SDL audio device ID.
     unsigned deviceID_;
     /// Sample size.
@@ -116,12 +169,29 @@ private:
     bool stereo_;
     /// Playing flag.
     bool playing_;
+    /// Output level.
+    float outputLevel_;
     /// Master gain by sound source type.
     float masterGain_[MAX_SOUND_TYPES];
     /// Sound sources.
     PODVector<SoundSource*> soundSources_;
     /// Sound listener.
     WeakPtr<SoundListener> listener_;
+
+    /// Capture Sound.
+    SharedPtr<Sound> captureSound_;
+    /// Capture Buffer.
+    SharedArrayPtr<unsigned> captureData_;
+    /// Capture position.
+    unsigned *capturePosition_;
+    /// Capture data size.
+    unsigned captureDataSize_;
+    /// Samples captured size.
+    unsigned samplesCapturedSize_;
+    /// Capturing.
+    bool capturing_;
+    /// Capture level.
+    float captureLevel_;
 };
 
 /// Register Audio library objects.
