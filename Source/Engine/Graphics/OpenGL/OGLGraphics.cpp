@@ -66,19 +66,7 @@
 
 #ifdef GL_ES_VERSION_2_0
 #define GL_DEPTH_COMPONENT24 GL_DEPTH_COMPONENT24_OES
-#define GL_FRAMEBUFFER_EXT GL_FRAMEBUFFER
-#define GL_RENDERBUFFER_EXT GL_RENDERBUFFER
-#define GL_COLOR_ATTACHMENT0_EXT GL_COLOR_ATTACHMENT0
-#define GL_DEPTH_ATTACHMENT_EXT GL_DEPTH_ATTACHMENT
-#define GL_STENCIL_ATTACHMENT_EXT GL_STENCIL_ATTACHMENT
-#define GL_FRAMEBUFFER_COMPLETE_EXT GL_FRAMEBUFFER_COMPLETE
 #define glClearDepth glClearDepthf
-#define glBindFramebufferEXT glBindFramebuffer
-#define glFramebufferTexture2DEXT glFramebufferTexture2D
-#define glFramebufferRenderbufferEXT glFramebufferRenderbuffer
-#define glGenFramebuffersEXT glGenFramebuffers
-#define glDeleteFramebuffersEXT glDeleteFramebuffers
-#define glCheckFramebufferStatusEXT glCheckFramebufferStatus
 #endif
 
 #ifdef WIN32
@@ -180,6 +168,73 @@ bool CheckExtension(String& extensions, const String& name)
     return extensions.Contains(name);
 }
 
+#ifdef _DEBUG
+#ifndef GL_ES_VERSION_2_0
+String OpenGLGetStringForSource(GLenum source) {
+
+    switch(source) {
+        case GL_DEBUG_SOURCE_API:
+            return("API");
+        case GL_DEBUG_SOURCE_SHADER_COMPILER:
+            return("Shader Compiler");
+        case GL_DEBUG_SOURCE_WINDOW_SYSTEM:
+            return("Window System");
+        case GL_DEBUG_SOURCE_THIRD_PARTY:
+            return("Third Party");
+        case GL_DEBUG_SOURCE_APPLICATION:
+            return("Application");
+        case GL_DEBUG_SOURCE_OTHER:
+            return("Other");
+        default:
+            return("");
+    }
+}
+
+String OpenGLGetStringForSeverity(GLenum severity) {
+
+    switch(severity) {
+        case GL_DEBUG_SEVERITY_HIGH:
+            return("High");
+        case GL_DEBUG_SEVERITY_MEDIUM:
+            return("Medium");
+        case GL_DEBUG_SEVERITY_LOW:
+            return("Low");
+        default:
+            return("");
+    }
+}
+
+String OpenGLGetStringForType(GLenum type) {
+
+    switch(type) {
+        case GL_DEBUG_TYPE_ERROR:
+            return("Error");
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
+            return("Deprecated Behaviour");
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
+            return("Undefined Behaviour");
+        case GL_DEBUG_TYPE_PORTABILITY:
+            return("Portability Issue");
+        case GL_DEBUG_TYPE_PERFORMANCE:
+            return("Performance Issue");
+        case GL_DEBUG_TYPE_OTHER:
+            return("Other");
+        default:
+            return("");
+    }
+}
+
+void OpenGLDebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *msg, const void *data)
+{
+    LOGDEBUGF("OpenGL Info - Type: %s; Source: %s; ID: %d; Severity: %s",
+              OpenGLGetStringForType(type).CString(),
+              OpenGLGetStringForSource(source).CString(),id,
+              OpenGLGetStringForSeverity(severity).CString());
+    LOGDEBUGF("OpenGL Message - %s", msg);
+}
+#endif
+#endif
+
 Graphics::Graphics(Context* context_) :
     Object(context_),
     impl_(new GraphicsImpl()),
@@ -203,6 +258,7 @@ Graphics::Graphics(Context* context_) :
     pvrtcTextureSupport_(false),
     sRGBSupport_(false),
     sRGBWriteSupport_(false),
+    openglVersion_(0),
     numPrimitives_(0),
     numBatches_(0),
     maxScratchBufferRequest_(0),
@@ -370,9 +426,17 @@ bool Graphics::SetMode(int width, int height, bool fullscreen, bool borderless, 
             SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
 
         SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        //SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+        #ifdef _DEBUG
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
         #endif
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+        #else
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+        #endif
         
         if (multiSample > 1)
         {
@@ -401,7 +465,26 @@ bool Graphics::SetMode(int width, int height, bool fullscreen, bool borderless, 
         for (;;)
         {
             if (!externalWindow_)
+            {
                 impl_->window_ = SDL_CreateWindow(windowTitle_.CString(), x, y, width, height, flags);
+                /*#ifndef GL_ES_VERSION_2_0
+                // Test to see if we got an OpenGL 4.2 context
+                if (impl_->window_)
+                {
+                    Restore();
+                    if (!impl_->context_)
+                    {
+                        LOGDEBUG("Could not create OpenGL 4.2 core profile context, reverting to 2.0");
+                        SDL_DestroyWindow(impl_->window_);
+                        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, 0);
+                        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+                        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+                        impl_->window_ = SDL_CreateWindow(windowTitle_.CString(), x, y, width, height, flags);
+                    }
+                    Release(false, false);
+                }
+                #endif*/
+            }
             else
             {
                 if (!impl_->window_)
@@ -447,6 +530,7 @@ bool Graphics::SetMode(int width, int height, bool fullscreen, bool borderless, 
         
         // If OpenGL extensions not yet initialized, initialize now
         #ifndef GL_ES_VERSION_2_0
+        glewExperimental = true;
         GLenum err = glewInit();
         if (GLEW_OK != err)
         {
@@ -455,6 +539,15 @@ bool Graphics::SetMode(int width, int height, bool fullscreen, bool borderless, 
             return false;
         }
         
+        String version = (const char*)glGetString(GL_VERSION);
+        //Vector<String> versionVec = version.Split('.');
+        //unsigned major = ToUInt(&versionVec[0].At(0));
+        //unsigned minor = ToUInt(&versionVec[1].At(0));
+        unsigned major = ToUInt(&version.At(0));
+        unsigned minor = ToUInt(&version.At(2));
+        openglVersion_ = major * 100 + minor;
+        LOGDEBUGF("OpenGL context is %u.%u", major, minor);
+
         if (!GLEW_VERSION_2_0)
         {
             LOGERROR("OpenGL 2.0 is required");
@@ -462,11 +555,34 @@ bool Graphics::SetMode(int width, int height, bool fullscreen, bool borderless, 
             return false;
         }
         
-        if (!GLEW_EXT_framebuffer_object || !GLEW_EXT_packed_depth_stencil)
+        if (openglVersion_ == 200)
         {
-            LOGERROR("EXT_framebuffer_object and EXT_packed_depth_stencil OpenGL extensions are required");
-            Release(true, true);
-            return false;
+            if (!GLEW_EXT_framebuffer_object || !GLEW_EXT_packed_depth_stencil)
+            {
+                LOGERROR("EXT_framebuffer_object and EXT_packed_depth_stencil OpenGL extensions are required");
+                Release(true, true);
+                return false;
+            }
+        }
+
+        if (GLEW_KHR_debug || openglVersion_ >= 403)
+        {
+            LOGDEBUG("KHR debug is available");
+            GLint v;
+            glGetIntegerv(GL_CONTEXT_FLAGS, &v);
+            if (v == GL_CONTEXT_FLAG_DEBUG_BIT)
+            {
+                glDebugMessageCallback((GLDEBUGPROC)OpenGLDebugCallback, NULL);
+                LOGDEBUG("OpenGL Debugging Enabled");
+            }
+        }
+
+        if (openglVersion_ >= 300)
+        {
+            // This is a hack to bind a default VAO until VAOs are properly supported
+            GLuint vao;
+            glGenVertexArrays(1, &vao);
+            glBindVertexArray(vao);
         }
         
         instancingSupport_ = GLEW_ARB_instanced_arrays != 0;
@@ -478,9 +594,9 @@ bool Graphics::SetMode(int width, int height, bool fullscreen, bool borderless, 
         // Set up instancing divisors if supported
         if (instancingSupport_)
         {
-            glVertexAttribDivisorARB(ELEMENT_INSTANCEMATRIX1, 1);
-            glVertexAttribDivisorARB(ELEMENT_INSTANCEMATRIX2, 1);
-            glVertexAttribDivisorARB(ELEMENT_INSTANCEMATRIX3, 1);
+            glVertexAttribDivisor(ELEMENT_INSTANCEMATRIX1, 1);
+            glVertexAttribDivisor(ELEMENT_INSTANCEMATRIX2, 1);
+            glVertexAttribDivisor(ELEMENT_INSTANCEMATRIX3, 1);
         }
         
         #else
@@ -2326,6 +2442,7 @@ void Graphics::Restore()
     if (!impl_->context_)
     {
         impl_->context_ = SDL_GL_CreateContext(impl_->window_);
+
         #ifdef IOS
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, (GLint*)&impl_->systemFbo_);
         #endif
@@ -2379,10 +2496,10 @@ void Graphics::CleanupRenderSurface(RenderSurface* surface)
             {
                 if (currentFbo != i->second_.fbo_)
                 {
-                    glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, i->second_.fbo_);
+                    glBindFramebuffer(GL_FRAMEBUFFER, i->second_.fbo_);
                     currentFbo = i->second_.fbo_;
                 }
-                glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT + j, GL_TEXTURE_2D, 0, 0);
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + j, GL_TEXTURE_2D, 0, 0);
                 i->second_.colorAttachments_[j] = 0;
                 // Mark drawbuffer bits to need recalculation
                 i->second_.drawBuffers_ = M_MAX_UNSIGNED;
@@ -2392,18 +2509,18 @@ void Graphics::CleanupRenderSurface(RenderSurface* surface)
         {
             if (currentFbo != i->second_.fbo_)
             {
-                glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, i->second_.fbo_);
+                glBindFramebuffer(GL_FRAMEBUFFER, i->second_.fbo_);
                 currentFbo = i->second_.fbo_;
             }
-            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_DEPTH_ATTACHMENT_EXT, GL_TEXTURE_2D, 0, 0);
-            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_STENCIL_ATTACHMENT_EXT, GL_TEXTURE_2D, 0, 0);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
             i->second_.depthAttachment_ = 0;
         }
     }
     
     // Restore previously bound FBO now if needed
     if (currentFbo != impl_->boundFbo_)
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, impl_->boundFbo_);
+        glBindFramebuffer(GL_FRAMEBUFFER, impl_->boundFbo_);
 }
 
 void Graphics::MarkFBODirty()
@@ -2650,7 +2767,7 @@ void Graphics::CommitFramebuffer()
     {
         if (impl_->boundFbo_ != impl_->systemFbo_)
         {
-            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, impl_->systemFbo_);
+            glBindFramebuffer(GL_FRAMEBUFFER, impl_->systemFbo_);
             impl_->boundFbo_ = impl_->systemFbo_;
         }
         
@@ -2687,7 +2804,7 @@ void Graphics::CommitFramebuffer()
     if (i == impl_->frameBuffers_.End())
     {
         FrameBufferObject newFbo;
-        glGenFramebuffersEXT(1, &newFbo.fbo_);
+        glGenFramebuffers(1, &newFbo.fbo_);
         i = impl_->frameBuffers_.Insert(MakePair(fboKey, newFbo));
     }
     
@@ -2695,7 +2812,7 @@ void Graphics::CommitFramebuffer()
     
     if (impl_->boundFbo_ != i->second_.fbo_)
     {
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, i->second_.fbo_);
+        glBindFramebuffer(GL_FRAMEBUFFER, i->second_.fbo_);
         impl_->boundFbo_ = i->second_.fbo_;
     }
     
@@ -2728,7 +2845,7 @@ void Graphics::CommitFramebuffer()
             for (unsigned i = 0; i < MAX_RENDERTARGETS; ++i)
             {
                 if (renderTargets_[i])
-                    drawBufferIds[drawBufferCount++] = GL_COLOR_ATTACHMENT0_EXT + i;
+                    drawBufferIds[drawBufferCount++] = GL_COLOR_ATTACHMENT0 + i;
             }
             glDrawBuffers(drawBufferCount, (const GLenum*)drawBufferIds);
         }
@@ -2753,7 +2870,7 @@ void Graphics::CommitFramebuffer()
             
             if (i->second_.colorAttachments_[j] != renderTargets_[j])
             {
-                glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT + j, renderTargets_[j]->GetTarget(),
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + j, renderTargets_[j]->GetTarget(),
                     texture->GetGPUObject(), 0);
                 i->second_.colorAttachments_[j] = renderTargets_[j];
             }
@@ -2762,7 +2879,7 @@ void Graphics::CommitFramebuffer()
         {
             if (i->second_.colorAttachments_[j])
             {
-                glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT + j, GL_TEXTURE_2D, 0, 0);
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + j, GL_TEXTURE_2D, 0, 0);
                 i->second_.colorAttachments_[j] = 0;
             }
         }
@@ -2790,14 +2907,14 @@ void Graphics::CommitFramebuffer()
 
             if (i->second_.depthAttachment_ != depthStencil_)
             {
-                glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_DEPTH_ATTACHMENT_EXT, GL_TEXTURE_2D, texture->GetGPUObject(), 0);
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texture->GetGPUObject(), 0);
                 if (hasStencil)
                 {
-                    glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_STENCIL_ATTACHMENT_EXT, GL_TEXTURE_2D,
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D,
                         texture->GetGPUObject(), 0);
                 }
                 else
-                    glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_STENCIL_ATTACHMENT_EXT, GL_TEXTURE_2D, 0, 0);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
                 
                 i->second_.depthAttachment_ = depthStencil_;
             }
@@ -2806,14 +2923,14 @@ void Graphics::CommitFramebuffer()
         {
             if (i->second_.depthAttachment_ != depthStencil_)
             {
-                glFramebufferRenderbufferEXT(GL_FRAMEBUFFER_EXT, GL_DEPTH_ATTACHMENT_EXT, GL_RENDERBUFFER_EXT, renderBufferID);
+                glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, renderBufferID);
                 if (hasStencil)
                 {
-                    glFramebufferRenderbufferEXT(GL_FRAMEBUFFER_EXT, GL_STENCIL_ATTACHMENT_EXT, GL_RENDERBUFFER_EXT,
+                    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER,
                         renderBufferID);
                 }
                 else
-                    glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_STENCIL_ATTACHMENT_EXT, GL_TEXTURE_2D, 0, 0);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
                 
                 i->second_.depthAttachment_ = depthStencil_;
             }
@@ -2823,8 +2940,8 @@ void Graphics::CommitFramebuffer()
     {
         if (i->second_.depthAttachment_)
         {
-            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_DEPTH_ATTACHMENT_EXT, GL_TEXTURE_2D, 0, 0);
-            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_STENCIL_ATTACHMENT_EXT, GL_TEXTURE_2D, 0, 0);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
             i->second_.depthAttachment_ = 0;
         }
     }
@@ -2848,7 +2965,7 @@ void Graphics::CommitFramebuffer()
 
 bool Graphics::CheckFramebuffer()
 {
-    return glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT) == GL_FRAMEBUFFER_COMPLETE_EXT;
+    return glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
 }
 
 void Graphics::CleanupFramebuffers(bool force)
@@ -2861,7 +2978,7 @@ void Graphics::CleanupFramebuffers(bool force)
             if (i->second_.fbo_ != impl_->boundFbo_ && (force || i->second_.useTimer_.GetMSec(false) >
                 MAX_FRAMEBUFFER_AGE))
             {
-                glDeleteFramebuffersEXT(1, &i->second_.fbo_);
+                glDeleteFramebuffers(1, &i->second_.fbo_);
                 i = impl_->frameBuffers_.Erase(i);
             }
             else

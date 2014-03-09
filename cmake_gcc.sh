@@ -36,6 +36,7 @@ TOOLCHAINS=$SOURCE/CMake/Toolchains
 IFS=#
 GENERATOR="Unix Makefiles"
 [[ $1 =~ ^eclipse$ ]] && GENERATOR="Eclipse CDT4 - Unix Makefiles" && shift && xmlstarlet --version >/dev/null 2>&1 && HAS_XMLSTARLET=1
+[[ $1 =~ ^codeblocks$ ]] && GENERATOR="CodeBlocks - Unix Makefiles"
 
 # Add support for CodeBlocks IDE
 [[ $1 =~ ^codeblocks$ ]] && GENERATOR="CodeBlocks - Unix Makefiles"

@@ -296,9 +296,15 @@ unsigned Texture::GetRowDataSize(int width) const
     {
     case GL_ALPHA:
     case GL_LUMINANCE:
+    #ifndef GL_ES_VERSION_2_0
+    case GL_RED:
+    #endif
         return width;
         
     case GL_LUMINANCE_ALPHA:
+    #ifndef GL_ES_VERSION_2_0
+    case GL_RG:
+    #endif
         return width * 2;
         
     case GL_RGB:
