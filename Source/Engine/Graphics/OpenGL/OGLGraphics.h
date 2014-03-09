@@ -370,6 +370,8 @@ public:
     IntVector2 GetRenderTargetDimensions() const;
     /// Return force Shader Model 2 flag. Always false on OpenGL.
     bool GetForceSM2() const { return false; }
+    /// Return the OpenGL version number.
+    unsigned GetOpenGLVersion() const { return openglVersion_; }
 
     /// Window was resized through user interaction. Called by Input subsystem.
     void WindowResized();
@@ -489,6 +491,8 @@ private:
     bool sRGBSupport_;
     /// sRGB conversion on write support flag.
     bool sRGBWriteSupport_;
+    /// OpenGL version number.
+    unsigned openglVersion_;
     /// Number of primitives this frame.
     unsigned numPrimitives_;
     /// Number of batches this frame.

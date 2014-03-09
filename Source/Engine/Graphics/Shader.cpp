@@ -106,6 +106,16 @@ bool Shader::Load(Deserializer& source)
     vsSourceCode_.Replace("void VS(", "void main(");
     psSourceCode_.Replace("void PS(", "void main(");
     psSourceCode_.Replace("attribute ", "// attribute ");
+
+    // OpenGL >= 3.x changed the GLSL spec from 2.x
+    if(graphics->GetOpenGLVersion() >= 300)
+    {
+        vsSourceCode_.Replace("#version 110", "#version 130");
+        vsSourceCode_.Replace("attribute ", "in ");
+        vsSourceCode_.Replace("varying ", "out ");
+        psSourceCode_.Replace("#version 110", "#version 130");
+        psSourceCode_.Replace("varying ", "in ");
+    }
     #endif
     
     // If variations had already been created, release them and require recompile
