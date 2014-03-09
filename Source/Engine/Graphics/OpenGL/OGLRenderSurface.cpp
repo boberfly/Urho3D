@@ -32,14 +32,6 @@
 
 #include "DebugNew.h"
 
-#ifdef GL_ES_VERSION_2_0
-#define GL_RENDERBUFFER_EXT GL_RENDERBUFFER
-#define glGenRenderbuffersEXT glGenRenderbuffers
-#define glBindRenderbufferEXT glBindRenderbuffer
-#define glRenderbufferStorageEXT glRenderbufferStorage
-#define glDeleteRenderbuffersEXT glDeleteRenderbuffers
-#endif
-
 namespace Urho3D
 {
 
@@ -123,10 +115,10 @@ bool RenderSurface::CreateRenderBuffer(unsigned width, unsigned height, unsigned
     
     Release();
     
-    glGenRenderbuffersEXT(1, &renderBuffer_);
-    glBindRenderbufferEXT(GL_RENDERBUFFER_EXT, renderBuffer_);
-    glRenderbufferStorageEXT(GL_RENDERBUFFER_EXT, format, width, height);
-    glBindRenderbufferEXT(GL_RENDERBUFFER_EXT, 0);
+    glGenRenderbuffers(1, &renderBuffer_);
+    glBindRenderbuffer(GL_RENDERBUFFER, renderBuffer_);
+    glRenderbufferStorage(GL_RENDERBUFFER, format, width, height);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
     return true;
 }
 
@@ -172,7 +164,7 @@ void RenderSurface::Release()
         graphics->CleanupRenderSurface(this);
         
         if (renderBuffer_)
-            glDeleteRenderbuffersEXT(1, &renderBuffer_);
+            glDeleteRenderbuffers(1, &renderBuffer_);
     }
     
     renderBuffer_ = 0;

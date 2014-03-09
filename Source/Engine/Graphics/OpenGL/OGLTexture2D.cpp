@@ -413,6 +413,48 @@ bool Texture2D::Create()
         return true;
     }
 
+    #ifndef GL_ES_VERSION_2_0
+    // Need to swizzle on OpenGL >= 3.0 to support GL_ALPHA, GL_LUMINANCE and GL_LUMINANCE_ALPHA
+    GLint swizzleMask[4] = {0, 0, 0, 0};
+    if (graphics_->GetOpenGLVersion() >= 300 && format_ == GL_ALPHA ||
+        format_ == GL_LUMINANCE || format_ == GL_LUMINANCE_ALPHA)
+    {
+        switch (format_)
+        {
+            case GL_ALPHA:
+            {
+                swizzleMask[0] = GL_ONE;
+                swizzleMask[1] = GL_ONE;
+                swizzleMask[2] = GL_ONE;
+                swizzleMask[3] = GL_RED;
+                format_ = GL_RED;
+                break;
+            }
+            case GL_LUMINANCE:
+            {
+                swizzleMask[0] = GL_RED;
+                swizzleMask[1] = GL_RED;
+                swizzleMask[2] = GL_RED;
+                swizzleMask[3] = GL_ONE;
+                format_ = GL_RED;
+                break;
+
+            }
+            case GL_LUMINANCE_ALPHA:
+            {
+                swizzleMask[0] = GL_RED;
+                swizzleMask[1] = GL_RED;
+                swizzleMask[2] = GL_RED;
+                swizzleMask[3] = GL_GREEN;
+                format_ = GL_RG;
+                break;
+            }
+            default:
+                break;
+        }
+    }
+    #endif
+
     unsigned format = GetSRGB() ? GetSRGBFormat(format_) : format_;
     unsigned externalFormat = GetExternalFormat(format_);
     unsigned dataType = GetDataType(format_);
@@ -469,6 +511,10 @@ bool Texture2D::Create()
     #ifndef GL_ES_VERSION_2_0
     glTexParameteri(target_, GL_TEXTURE_BASE_LEVEL, 0);
     glTexParameteri(target_, GL_TEXTURE_MAX_LEVEL, levels_ - 1);
+
+    // Need to swizzle on OpenGL >= 3.0 to support GL_ALPHA, GL_LUMINANCE and GL_LUMINANCE_ALPHA
+    if (graphics_->GetOpenGLVersion() >= 300 && swizzleMask[0])
+        glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
     #endif
     
     // Set initial parameters, then unbind the texture
