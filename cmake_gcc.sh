@@ -38,14 +38,11 @@ GENERATOR="Unix Makefiles"
 [[ $1 =~ ^eclipse$ ]] && GENERATOR="Eclipse CDT4 - Unix Makefiles" && shift && xmlstarlet --version >/dev/null 2>&1 && HAS_XMLSTARLET=1
 [[ $1 =~ ^codeblocks$ ]] && GENERATOR="CodeBlocks - Unix Makefiles"
 
-# Add support for CodeBlocks IDE
-[[ $1 =~ ^codeblocks$ ]] && GENERATOR="CodeBlocks - Unix Makefiles"
-
 # Add support for both native and cross-compiling build for Raspberry Pi
 [[ $( uname -m ) =~ ^armv6 ]] && PLATFORM="-DRASPI=1"
 
 # Create project with the respective CMake generators
-OPT=
+OPT=-Wno-dev    # \todo suppress policy warning (for 2.8.12 early adopters), remove this option when CMake minimum version is 2.8.12
 [ $ANDROID_NDK ] && msg "Android build" && cmake -E make_directory android-Build && cmake -E chdir android-Build cmake $OPT -G $GENERATOR -DANDROID=1 -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAINS/android.toolchain.cmake -DLIBRARY_OUTPUT_PATH_ROOT=. $@ $SOURCE && post_cmake android-Build
 [ $RASPI_TOOL ] && msg "Raspberry Pi build" && cmake -E make_directory raspi-Build && cmake -E chdir raspi-Build cmake $OPT -G $GENERATOR -DRASPI=1 -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAINS/raspberrypi.toolchain.cmake $@ $SOURCE && post_cmake raspi-Build
 [ $MINGW_PREFIX ] && msg "MingW build" && cmake -E make_directory mingw-Build && cmake -E chdir mingw-Build cmake $OPT -G $GENERATOR -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAINS/mingw.toolchain.cmake $@ $SOURCE && post_cmake mingw-Build
