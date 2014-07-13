@@ -208,7 +208,7 @@ void Batch::Prepare(View* view, bool setModelTransform) const
     }
     
     // Set shaders first. The available shader parameters and their register/uniform positions depend on the currently set shaders
-    graphics->SetShaders(vertexShader_, pixelShader_);
+    graphics->SetShaders(vertexShader_, 0, 0, 0, pixelShader_, 0);
     
     // Set global (per-frame) shader parameters
     if (graphics->NeedParameterUpdate(SP_FRAME, (void*)0))

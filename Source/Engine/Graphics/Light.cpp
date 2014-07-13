@@ -407,7 +407,7 @@ int Light::GetNumShadowSplits() const
     if (ret == 4)
     {
         Graphics* graphics = GetSubsystem<Graphics>();
-        if (graphics && !graphics->GetSM3Support())
+        if (graphics && graphics->GetSMSupport() < 3)
             --ret;
     }
     

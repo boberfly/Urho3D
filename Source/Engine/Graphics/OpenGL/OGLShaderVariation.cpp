@@ -64,6 +64,7 @@ void ShaderVariation::Release()
         
         if (!graphics_->IsDeviceLost())
         {
+            /*
             if (type_ == VS)
             {
                 if (graphics_->GetVertexShader() == this)
@@ -73,6 +74,48 @@ void ShaderVariation::Release()
             {
                 if (graphics_->GetPixelShader() == this)
                     graphics_->SetShaders(0, 0);
+            }
+            */
+            switch (type_)
+            {
+                case VS:
+                {
+                    if(graphics_->GetVertexShader() == this)
+                        graphics_->SetShaders(0, 0, 0, 0, 0, 0);
+                    break;
+                }
+                case HS:
+                {
+                    if(graphics_->GetHullShader() == this)
+                        graphics_->SetShaders(0, 0, 0, 0, 0, 0);
+                    break;
+                }
+                case DS:
+                {
+                    if(graphics_->GetDomainShader() == this)
+                        graphics_->SetShaders(0, 0, 0, 0, 0, 0);
+                    break;
+                }
+                case GS:
+                {
+                    if(graphics_->GetGeometryShader() == this)
+                        graphics_->SetShaders(0, 0, 0, 0, 0, 0);
+                    break;
+                }
+                case PS:
+                {
+                    if(graphics_->GetPixelShader() == this)
+                        graphics_->SetShaders(0, 0, 0, 0, 0, 0);
+                    break;
+                }
+                case CS:
+                {
+                    if(graphics_->GetComputeShader() == this)
+                        graphics_->SetShaders(0, 0, 0, 0, 0, 0);
+                    break;
+                }
+                default:
+                    break;
             }
             
             glDeleteShader(object_);
@@ -95,7 +138,43 @@ bool ShaderVariation::Create()
         return false;
     }
     
-    object_ = glCreateShader(type_ == VS ? GL_VERTEX_SHADER : GL_FRAGMENT_SHADER);
+//    object_ = glCreateShader(type_ == VS ? GL_VERTEX_SHADER : GL_FRAGMENT_SHADER);
+    switch (type_)
+    {
+        case VS:
+        {
+            object_ = glCreateShader(GL_VERTEX_SHADER);
+            break;
+        }
+        case HS:
+        {
+            object_ = glCreateShader(GL_TESS_CONTROL_SHADER);
+            break;
+        }
+        case DS:
+        {
+            object_ = glCreateShader(GL_TESS_EVALUATION_SHADER);
+            break;
+        }
+        case GS:
+        {
+            object_ = glCreateShader(GL_GEOMETRY_SHADER);
+            break;
+        }
+        case PS:
+        {
+            object_ = glCreateShader(GL_FRAGMENT_SHADER);
+            break;
+        }
+        case CS:
+        {
+            object_ = glCreateShader(GL_COMPUTE_SHADER);
+            break;
+        }
+        default:
+            break;
+    }
+
     if (!object_)
     {
         compilerOutput_ = "Could not create shader object";
@@ -126,9 +205,44 @@ bool ShaderVariation::Create()
         }
     }
 
-    // Distinguish between VS and PS compile in case the shader code wants to include/omit different things
-    shaderCode += type_ == VS ? "#define COMPILEVS\n" : "#define COMPILEPS\n";
-    
+    // Distinguish between shader type compile in case the shader code wants to include/omit different things
+    //shaderCode += type_ == VS ? "#define COMPILEVS\n" : "#define COMPILEPS\n";
+    switch (type_)
+    {
+        case VS:
+        {
+            shaderCode += "#define COMPILEVS\n";
+            break;
+        }
+        case HS:
+        {
+            shaderCode += "#define COMPILEHS\n";
+            break;
+        }
+        case DS:
+        {
+            shaderCode += "#define COMPILEDS\n";
+            break;
+        }
+        case GS:
+        {
+            shaderCode += "#define COMPILEGS\n";
+            break;
+        }
+        case PS:
+        {
+            shaderCode += "#define COMPILEPS\n";
+            break;
+        }
+        case CS:
+        {
+            shaderCode += "#define COMPILECS\n";
+            break;
+        }
+        default:
+            break;
+    }
+
     // Prepend the defines to the shader code
     Vector<String> defineVec = defines_.Split(' ');
     for (unsigned i = 0; i < defineVec.Size(); ++i)

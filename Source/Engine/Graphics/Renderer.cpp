@@ -1300,7 +1300,7 @@ void Renderer::OptimizeLightByStencil(Light* light, Camera* camera)
         graphics_->SetColorWrite(false);
         graphics_->SetDepthWrite(false);
         graphics_->SetStencilTest(true, CMP_ALWAYS, OP_REF, OP_KEEP, OP_KEEP, lightStencilValue_);
-        graphics_->SetShaders(graphics_->GetShader(VS, "Stencil"), graphics_->GetShader(PS, "Stencil"));
+        graphics_->SetShaders(graphics_->GetShader(VS, "Stencil"), 0, 0, 0, graphics_->GetShader(PS, "Stencil"), 0);
         graphics_->SetShaderParameter(VSP_VIEWPROJ, projection * view);
         graphics_->SetShaderParameter(VSP_MODEL, light->GetVolumeTransform(camera));
         
@@ -1471,7 +1471,7 @@ void Renderer::LoadPassShaders(Technique* tech, StringHash type)
     PROFILE(LoadPassShaders);
     
     unsigned shadows = (graphics_->GetHardwareShadowSupport() ? 1 : 0) | (shadowQuality_ & SHADOWQUALITY_HIGH_16BIT);
-    bool isSM3 = graphics_->GetSM3Support();
+    //bool isSM3 = graphics_->GetSM3Support();
     
     Vector<SharedPtr<ShaderVariation> >& vertexShaders = pass->GetVertexShaders();
     Vector<SharedPtr<ShaderVariation> >& pixelShaders = pass->GetPixelShaders();

@@ -51,7 +51,7 @@ public:
     /// Return a variation with defines.
     ShaderVariation* GetVariation(ShaderType type, const char* defines);
     /// Return either vertex or pixel shader source code.
-    const String& GetSourceCode(ShaderType type) const { return type == VS ? vsSourceCode_ : psSourceCode_; }
+    const String& GetSourceCode(ShaderType type);
     /// Return the latest timestamp of the shader code and its includes.
     unsigned GetTimeStamp() const { return timeStamp_; }
     
@@ -65,12 +65,28 @@ private:
     
     /// Source code adapted for vertex shader.
     String vsSourceCode_;
+    /// Source code adapted for hull shader.
+    String hsSourceCode_;
+    /// Source code adapted for domain shader.
+    String dsSourceCode_;
+    /// Source code adapted for geometry shader.
+    String gsSourceCode_;
     /// Source code adapted for pixel shader.
     String psSourceCode_;
+    /// Source code adapted for compute shader.
+    String csSourceCode_;
     /// Vertex shader variations.
     HashMap<StringHash, SharedPtr<ShaderVariation> > vsVariations_;
+    /// Hull shader variations.
+    HashMap<StringHash, SharedPtr<ShaderVariation> > hsVariations_;
+    /// Domain shader variations.
+    HashMap<StringHash, SharedPtr<ShaderVariation> > dsVariations_;
+    /// Geometry shader variations.
+    HashMap<StringHash, SharedPtr<ShaderVariation> > gsVariations_;
     /// Pixel shader variations.
     HashMap<StringHash, SharedPtr<ShaderVariation> > psVariations_;
+    /// Compute shader variations.
+    HashMap<StringHash, SharedPtr<ShaderVariation> > csVariations_;
     /// Source code timestamp.
     unsigned timeStamp_;
     /// Number of unique variations so far.

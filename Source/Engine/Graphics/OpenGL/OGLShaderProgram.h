@@ -47,7 +47,9 @@ class URHO3D_API ShaderProgram : public RefCounted, public GPUObject
 {
 public:
     /// Construct.
-    ShaderProgram(Graphics* graphics, ShaderVariation* vertexShader, ShaderVariation* pixelShader);
+    ShaderProgram(Graphics* graphics, ShaderVariation* vertexShader, ShaderVariation* hullShader,
+                  ShaderVariation* domainShader, ShaderVariation* geometryShader,
+                  ShaderVariation* pixelShader, ShaderVariation* computeShader);
     /// Destruct.
     ~ShaderProgram();
     
@@ -59,10 +61,18 @@ public:
     /// Link the shaders and examine the uniforms and samplers used. Return true if successful.
     bool Link();
     
-    /// Return the vertex shader.
+    /// Return the vertex shader, or null if does not exist.
     ShaderVariation* GetVertexShader() const;
-    /// Return the pixel shader.
+    /// Return the hull shader, or null if does not exist.
+    ShaderVariation* GetHullShader() const;
+    /// Return the domain shader, or null if does not exist.
+    ShaderVariation* GetDomainShader() const;
+    /// Return the geometry shader, or null if does not exist.
+    ShaderVariation* GetGeometryShader() const;
+    /// Return the pixel shader, or null if does not exist.
     ShaderVariation* GetPixelShader() const;
+    /// Return the compute shader, or null if does not exist.
+    ShaderVariation* GetComputeShader() const;
     /// Return whether uses a shader parameter.
     bool HasParameter(StringHash param) const;
     /// Return whether uses a texture unit.
@@ -75,8 +85,16 @@ public:
 private:
     /// Vertex shader.
     WeakPtr<ShaderVariation> vertexShader_;
+    /// Hull shader.
+    WeakPtr<ShaderVariation> hullShader_;
+    /// Domain shader.
+    WeakPtr<ShaderVariation> domainShader_;
+    /// Geometry shader.
+    WeakPtr<ShaderVariation> geometryShader_;
     /// Pixel shader.
     WeakPtr<ShaderVariation> pixelShader_;
+    /// Compute shader.
+    WeakPtr<ShaderVariation> computeShader_;
     /// Shader parameters.
     HashMap<StringHash, ShaderParameter> shaderParameters_;
     /// Texture unit use.

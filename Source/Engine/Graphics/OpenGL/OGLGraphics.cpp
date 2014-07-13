@@ -258,7 +258,9 @@ Graphics::Graphics(Context* context_) :
     pvrtcTextureSupport_(false),
     sRGBSupport_(false),
     sRGBWriteSupport_(false),
+    computeSupport_(false),
     openglVersion_(0),
+    shaderModel_(3),
     numPrimitives_(0),
     numBatches_(0),
     maxScratchBufferRequest_(0),
@@ -547,6 +549,12 @@ bool Graphics::SetMode(int width, int height, bool fullscreen, bool borderless, 
         unsigned minor = ToUInt(&version.At(2));
         openglVersion_ = major * 100 + minor;
         LOGDEBUGF("OpenGL context is %u.%u", major, minor);
+        if (openglVersion_ >= 303)
+            shaderModel_ = 4;
+        if (openglVersion_ >= 402)
+            shaderModel_ = 5;
+        if (openglVersion_ >= 403)
+            computeSupport_ = true;
 
         if (!GLEW_VERSION_2_0)
         {
@@ -1166,12 +1174,15 @@ void Graphics::SetIndexBuffer(IndexBuffer* buffer)
     indexBuffer_ = buffer;
 }
 
-void Graphics::SetShaders(ShaderVariation* vs, ShaderVariation* ps)
+void Graphics::SetShaders(ShaderVariation* vs, ShaderVariation* hs, ShaderVariation* ds,
+                          ShaderVariation* gs, ShaderVariation* ps, ShaderVariation* cs)
 {
-    if (vs == vertexShader_ && ps == pixelShader_)
+    if (vs == vertexShader_ && hs == hullShader_ && ds == domainShader_ && gs == geometryShader_ && ps == pixelShader_ && cs == computeShader_)
         return;
     
     ClearParameterSources();
+
+    bool compileFail = false;
 
     // Compile the shaders now if not yet compiled. If already attempted, do not retry
     if (vs && !vs->GetGPUObject())
@@ -1186,11 +1197,68 @@ void Graphics::SetShaders(ShaderVariation* vs, ShaderVariation* ps)
             else
             {
                 LOGERROR("Failed to compile vertex shader " + vs->GetFullName() + ":\n" + vs->GetCompilerOutput());
-                vs = 0;
+                compileFail = true;
             }
         }
         else
-            vs = 0;
+            compileFail = true;
+    }
+
+    if (hs && !hs->GetGPUObject())
+    {
+        if (hs->GetCompilerOutput().Empty())
+        {
+            PROFILE(CompileHullShader);
+
+            bool success = hs->Create();
+            if (success)
+                LOGDEBUG("Compiled hull shader " + hs->GetFullName());
+            else
+            {
+                LOGERROR("Failed to compile hull shader " + hs->GetFullName() + ":\n" + hs->GetCompilerOutput());
+                compileFail = true;
+            }
+        }
+        else
+            compileFail = true;
+    }
+
+    if (ds && !ds->GetGPUObject())
+    {
+        if (ds->GetCompilerOutput().Empty())
+        {
+            PROFILE(CompileDomainShader);
+
+            bool success = ds->Create();
+            if (success)
+                LOGDEBUG("Compiled domain shader " + ds->GetFullName());
+            else
+            {
+                LOGERROR("Failed to compile domain shader " + ds->GetFullName() + ":\n" + ds->GetCompilerOutput());
+                compileFail = true;
+            }
+        }
+        else
+            compileFail = true;
+    }
+
+    if (gs && !gs->GetGPUObject())
+    {
+        if (gs->GetCompilerOutput().Empty())
+        {
+            PROFILE(CompileGeometryShader);
+
+            bool success = gs->Create();
+            if (success)
+                LOGDEBUG("Compiled geometry shader " + gs->GetFullName());
+            else
+            {
+                LOGERROR("Failed to compile geometry shader " + gs->GetFullName() + ":\n" + gs->GetCompilerOutput());
+                compileFail = true;
+            }
+        }
+        else
+            compileFail = true;
     }
     
     if (ps && !ps->GetGPUObject())
@@ -1205,24 +1273,51 @@ void Graphics::SetShaders(ShaderVariation* vs, ShaderVariation* ps)
             else
             {
                 LOGERROR("Failed to compile pixel shader " + ps->GetFullName() + ":\n" + ps->GetCompilerOutput());
-                ps = 0;
+                compileFail = true;
             }
         }
         else
-            ps = 0;
+            compileFail = true;
     }
-    
-    if (!vs || !ps)
+
+    if (cs && !cs->GetGPUObject())
+    {
+        if (cs->GetCompilerOutput().Empty())
+        {
+            PROFILE(CompileComputeShader);
+
+            bool success = cs->Create();
+            if (success)
+                LOGDEBUG("Compiled compute shader " + cs->GetFullName());
+            else
+            {
+                LOGERROR("Failed to compile compute shader " + cs->GetFullName() + ":\n" + cs->GetCompilerOutput());
+                compileFail = true;
+            }
+        }
+        else
+            compileFail = true;
+    }
+
+    if (compileFail)
     {
         glUseProgram(0);
         vertexShader_ = 0;
+        hullShader_ = 0;
+        domainShader_ = 0;
+        geometryShader_ = 0;
         pixelShader_ = 0;
+        computeShader_ = 0;
         shaderProgram_ = 0;
     }
     else
     {
         vertexShader_ = vs;
+        hullShader_ = hs;
+        domainShader_ = ds;
+        geometryShader_ = gs;
         pixelShader_ = ps;
+        computeShader_ = cs;
         
         Pair<ShaderVariation*, ShaderVariation*> combination(vs, ps);
         ShaderProgramMap::Iterator i = shaderPrograms_.Find(combination);
@@ -1246,17 +1341,46 @@ void Graphics::SetShaders(ShaderVariation* vs, ShaderVariation* ps)
             // Link a new combination
             PROFILE(LinkShaders);
             
-            SharedPtr<ShaderProgram> newProgram(new ShaderProgram(this, vs, ps));
+            SharedPtr<ShaderProgram> newProgram(new ShaderProgram(this, vs, hs, ds, gs, ps, cs));
             if (newProgram->Link())
             {
-                LOGDEBUG("Linked vertex shader " + vs->GetFullName() + " and pixel shader " + ps->GetFullName());
+                #ifdef _DEBUG
+                String shaderNames;
+                if (vs)
+                    shaderNames += vs->GetFullName();
+                else if (cs)
+                    shaderNames += cs->GetFullName();
+                if (hs && ds)
+                    shaderNames += ", " + hs->GetFullName() + ", " + ds->GetFullName();
+                if (gs)
+                    shaderNames += ", " + gs->GetFullName();
+                if (ps)
+                    shaderNames += ", " + ps->GetFullName();
+                if (cs)
+                    shaderNames += ", " + cs->GetFullName();
+
+                LOGDEBUG("Linked shaders " + shaderNames + ".");
+                #endif
                 // Note: Link() calls glUseProgram() to set the texture sampler uniforms,
                 // so it is not necessary to call it again
                 shaderProgram_ = newProgram;
             }
             else
             {
-                LOGERROR("Failed to link vertex shader " + vs->GetFullName() + " and pixel shader " + ps->GetFullName() + ":\n" +
+                String shaderNames;
+                if (vs)
+                    shaderNames += vs->GetFullName();
+                else if (cs)
+                    shaderNames += cs->GetFullName();
+                if (hs && ds)
+                    shaderNames += ", " + hs->GetFullName() + ", " + ds->GetFullName();
+                if (gs)
+                    shaderNames += ", " + gs->GetFullName();
+                if (ps)
+                    shaderNames += ", " + ps->GetFullName();
+                if (cs)
+                    shaderNames += ", " + cs->GetFullName();
+                LOGERROR("Failed to link shaders " + shaderNames + ":\n" +
                     newProgram->GetLinkerOutput());
                 glUseProgram(0);
                 shaderProgram_ = 0;
@@ -1269,7 +1393,7 @@ void Graphics::SetShaders(ShaderVariation* vs, ShaderVariation* ps)
 
     // Store shader combination if shader dumping in progress
     if (shaderPrecache_)
-        shaderPrecache_->StoreShaders(vertexShader_, pixelShader_);
+        shaderPrecache_->StoreShaders(vertexShader_, hullShader_, domainShader_, geometryShader_, pixelShader_, computeShader_);
 }
 
 void Graphics::SetShaderParameter(StringHash param, const float* data, unsigned count)

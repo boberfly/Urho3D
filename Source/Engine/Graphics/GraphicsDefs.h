@@ -34,7 +34,8 @@ class Vector3;
 enum PrimitiveType
 {
     TRIANGLE_LIST = 0,
-    LINE_LIST
+    LINE_LIST,
+    PATCH_LIST
 };
 
 /// %Geometry type.
@@ -194,7 +195,11 @@ enum RenderSurfaceUpdateMode
 enum ShaderType
 {
     VS = 0,
+    HS,
+    DS,
+    GS,
     PS,
+    CS
 };
 
 /// Shader parameter groups for determining need to update.

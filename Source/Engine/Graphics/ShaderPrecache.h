@@ -44,7 +44,8 @@ public:
     ~ShaderPrecache();
     
     /// Collect a shader combination. Called by Graphics when shaders have been set.
-    void StoreShaders(ShaderVariation* vs, ShaderVariation* ps);
+    void StoreShaders(ShaderVariation* vs, ShaderVariation* hs, ShaderVariation* ds,
+                      ShaderVariation* gs, ShaderVariation* ps, ShaderVariation* cs);
     
     /// Load shaders from an XML file.
     static void LoadShaders(Graphics* graphics, Deserializer& source);
@@ -55,6 +56,7 @@ private:
     /// XML file.
     XMLFile xmlFile_;
     /// Already encountered shader combinations, pointer version for fast queries.
+    //HashSet<Vector<ShaderVariation*> > usedPtrCombinations_;
     HashSet<Pair<ShaderVariation*, ShaderVariation*> > usedPtrCombinations_;
     /// Already encountered shader combinations.
     HashSet<String> usedCombinations_;

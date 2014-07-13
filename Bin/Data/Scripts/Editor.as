@@ -285,8 +285,16 @@ void SaveConfig()
         renderingElem.SetInt("maxoccludertriangles", renderer.maxOccluderTriangles);
         renderingElem.SetBool("specularlighting", renderer.specularLighting);
         // If Shader Model 3 is not supported, save the remembered instancing & quality settings instead of reduced settings
-        renderingElem.SetInt("shadowquality", graphics.sm3Support ? renderer.shadowQuality : shadowQualitySetting);
-        renderingElem.SetBool("dynamicinstancing", graphics.sm3Support ? renderer.dynamicInstancing : instancingSetting);
+        if (graphics.smSupport > 2)
+        {
+            renderingElem.SetInt("shadowquality", renderer.shadowQuality);
+            renderingElem.SetBool("dynamicinstancing", renderer.dynamicInstancing);
+        }
+        else
+        {
+            renderingElem.SetInt("shadowquality", shadowQualitySetting);
+            renderingElem.SetBool("dynamicinstancing", instancingSetting);
+        }
     }
 
     renderingElem.SetBool("framelimiter", engine.maxFps > 0);

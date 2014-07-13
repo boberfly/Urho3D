@@ -63,6 +63,69 @@ void CommentOutFunction(String& code, const String& signature)
     }
 }
 
+void CommentOutFromShaderType(String& code, ShaderType type)
+{
+    switch (type)
+    {
+        case VS:
+        {
+            CommentOutFunction(code, "void HS(");
+            CommentOutFunction(code, "void DS(");
+            CommentOutFunction(code, "void GS(");
+            CommentOutFunction(code, "void PS(");
+            CommentOutFunction(code, "void CS(");
+            break;
+        }
+        case HS:
+        {
+            CommentOutFunction(code, "void VS(");
+            CommentOutFunction(code, "void DS(");
+            CommentOutFunction(code, "void GS(");
+            CommentOutFunction(code, "void PS(");
+            CommentOutFunction(code, "void CS(");
+            break;
+        }
+        case DS:
+        {
+            CommentOutFunction(code, "void VS(");
+            CommentOutFunction(code, "void HS(");
+            CommentOutFunction(code, "void GS(");
+            CommentOutFunction(code, "void PS(");
+            CommentOutFunction(code, "void CS(");
+            break;
+        }
+        case GS:
+        {
+            CommentOutFunction(code, "void VS(");
+            CommentOutFunction(code, "void HS(");
+            CommentOutFunction(code, "void DS(");
+            CommentOutFunction(code, "void PS(");
+            CommentOutFunction(code, "void CS(");
+            break;
+        }
+        case PS:
+        {
+            CommentOutFunction(code, "void VS(");
+            CommentOutFunction(code, "void HS(");
+            CommentOutFunction(code, "void DS(");
+            CommentOutFunction(code, "void GS(");
+            CommentOutFunction(code, "void CS(");
+            break;
+        }
+        case CS:
+        {
+            CommentOutFunction(code, "void VS(");
+            CommentOutFunction(code, "void HS(");
+            CommentOutFunction(code, "void DS(");
+            CommentOutFunction(code, "void GS(");
+            CommentOutFunction(code, "void PS(");
+            break;
+        }
+        default:
+            return;
+    }
+}
+
 Shader::Shader(Context* context) :
     Resource(context),
     timeStamp_(0)
@@ -98,13 +161,26 @@ bool Shader::Load(Deserializer& source)
     // Comment out the unneeded shader function
     vsSourceCode_ = shaderCode;
     psSourceCode_ = shaderCode;
-    CommentOutFunction(vsSourceCode_, "void PS(");
-    CommentOutFunction(psSourceCode_, "void VS(");
+    hsSourceCode_ = shaderCode;
+    dsSourceCode_ = shaderCode;
+    gsSourceCode_ = shaderCode;
+    psSourceCode_ = shaderCode;
+    //CommentOutFunction(vsSourceCode_, "void PS(");
+    //CommentOutFunction(psSourceCode_, "void VS(");
+    CommentOutFromShaderType(vsSourceCode_, VS);
+    CommentOutFromShaderType(hsSourceCode_, HS);
+    CommentOutFromShaderType(dsSourceCode_, DS);
+    CommentOutFromShaderType(gsSourceCode_, GS);
+    CommentOutFromShaderType(psSourceCode_, PS);
     
     // OpenGL: rename either VS() or PS() to main(), comment out vertex attributes in pixel shaders
     #ifdef URHO3D_OPENGL
     vsSourceCode_.Replace("void VS(", "void main(");
+    hsSourceCode_.Replace("void HS(", "void main(");
+    dsSourceCode_.Replace("void DS(", "void main(");
+    gsSourceCode_.Replace("void GS(", "void main(");
     psSourceCode_.Replace("void PS(", "void main(");
+    csSourceCode_.Replace("void CS(", "void main(");
     psSourceCode_.Replace("attribute ", "// attribute ");
 
     // OpenGL >= 3.x changed the GLSL spec from 2.x
@@ -191,6 +267,27 @@ ShaderVariation* Shader::GetVariation(ShaderType type, const char* defines)
         }
         
         return i->second_;
+    }
+}
+
+const String& Shader::GetSourceCode(ShaderType type)
+{
+    switch (type)
+    {
+        case VS:
+            return vsSourceCode_;
+        case HS:
+            return hsSourceCode_;
+        case DS:
+            return dsSourceCode_;
+        case GS:
+            return gsSourceCode_;
+        case PS:
+            return psSourceCode_;
+        case CS:
+            return csSourceCode_;
+        default:
+            return "";
     }
 }
 

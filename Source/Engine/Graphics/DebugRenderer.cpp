@@ -408,7 +408,7 @@ void DebugRenderer::Render()
     graphics->SetDepthWrite(true);
     graphics->SetScissorTest(false);
     graphics->SetStencilTest(false);
-    graphics->SetShaders(vs, ps);
+    graphics->SetShaders(vs, 0, 0, 0, ps, 0);
     graphics->SetShaderParameter(VSP_MODEL, Matrix3x4::IDENTITY);
     graphics->SetShaderParameter(VSP_VIEWPROJ, projection_ * view_);
     graphics->SetShaderParameter(PSP_MATDIFFCOLOR, Color(1.0f, 1.0f, 1.0f, 1.0f));

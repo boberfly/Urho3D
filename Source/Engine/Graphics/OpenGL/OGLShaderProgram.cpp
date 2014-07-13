@@ -31,10 +31,16 @@
 namespace Urho3D
 {
 
-ShaderProgram::ShaderProgram(Graphics* graphics, ShaderVariation* vertexShader, ShaderVariation* pixelShader) :
+ShaderProgram::ShaderProgram(Graphics* graphics, ShaderVariation* vertexShader, ShaderVariation* hullShader,
+                             ShaderVariation* domainShader, ShaderVariation* geometryShader,
+                             ShaderVariation* pixelShader, ShaderVariation* computeShader) :
     GPUObject(graphics),
     vertexShader_(vertexShader),
-    pixelShader_(pixelShader)
+    hullShader_(hullShader),
+    domainShader_(domainShader),
+    geometryShader_(geometryShader),
+    pixelShader_(pixelShader),
+    computeShader_(computeShader)
 {
     for (unsigned i = 0; i < MAX_TEXTURE_UNITS; ++i)
         useTextureUnit_[i] = false;
@@ -50,7 +56,7 @@ void ShaderProgram::OnDeviceLost()
     GPUObject::OnDeviceLost();
     
     if (graphics_ && graphics_->GetShaderProgram() == this)
-        graphics_->SetShaders(0, 0);
+        graphics_->SetShaders(0, 0, 0, 0, 0, 0);
     
 
     linkerOutput_.Clear();
@@ -66,7 +72,7 @@ void ShaderProgram::Release()
         if (!graphics_->IsDeviceLost())
         {
             if (graphics_->GetShaderProgram() == this)
-                graphics_->SetShaders(0, 0);
+                graphics_->SetShaders(0, 0, 0, 0, 0, 0);
             
             glDeleteProgram(object_);
         }
@@ -83,9 +89,49 @@ void ShaderProgram::Release()
 bool ShaderProgram::Link()
 {
     Release();
-    
+    // We need either a vertex shader or a compute shader
+    if (!vertexShader_ && !computeShader_)
+        return false;
+    // We can't have both a vertex shader and a compute shader
+    if (vertexShader_ && computeShader_)
+        return false;
+    #ifndef GL_ES_VERSION_2_0
+    // OpenGL 2.0
+    if (graphics_->GetOpenGLVersion() < 300)
+        if (hullShader_ || domainShader_ || geometryShader_ || computeShader_)
+            return false;
+        if (!vertexShader_ || !pixelShader_ || !vertexShader_->GetGPUObject() || !pixelShader_->GetGPUObject())
+            return false;
+    // OpenGL 3.0 to 3.2 has no geometry shaders, but can have transform feedback which can have no pixel shader.
+    else if (graphics_->GetOpenGLVersion() < 302)
+        if (hullShader_ || domainShader_ || geometryShader_ || computeShader_)
+            return false;
+        if (!vertexShader_ || !vertexShader_->GetGPUObject())
+            return false;
+    // OpenGL 3.3 has geometry shader support.
+    else if (graphics_->GetOpenGLVersion() < 400)
+        if (hullShader_ || domainShader_ || computeShader_)
+            return false;
+        if (!vertexShader_ || !vertexShader_->GetGPUObject())
+            return false;
+    // OpenGL 4.0 to 4.2 has tessellation shader support.
+    else if (graphics_->GetOpenGLVersion() < 403)
+        if (computeShader_)
+            return false;
+        if (!vertexShader_ || !vertexShader_->GetGPUObject())
+            return false;
+    // OpenGL 4.3 has compute shader support and can bind a compute shader without a vertex shader?
+    else
+        if (!vertexShader_ || !vertexShader_->GetGPUObject())
+            if (!computeShader_ || !computeShader_->GetGPUObject())
+                return false;
+    #else
+    if (hullShader_ || domainShader_ || geometryShader_ || computeShader_)
+        return false;
     if (!vertexShader_ || !pixelShader_ || !vertexShader_->GetGPUObject() || !pixelShader_->GetGPUObject())
         return false;
+    #endif
+
     
     object_ = glCreateProgram();
     if (!object_)
@@ -97,24 +143,39 @@ bool ShaderProgram::Link()
     // Bind vertex attribute locations to ensure they are the same in all shaders
     // Note: this is not the same order as in VertexBuffer, instead a remapping is used to ensure everything except cube texture
     // coordinates fit to the first 8 for better GLES2 device compatibility
-    glBindAttribLocation(object_, 0, "iPos");
-    glBindAttribLocation(object_, 1, "iNormal");
-    glBindAttribLocation(object_, 2, "iColor");
-    glBindAttribLocation(object_, 3, "iTexCoord");
-    glBindAttribLocation(object_, 4, "iTexCoord2");
-    glBindAttribLocation(object_, 5, "iTangent");
-    glBindAttribLocation(object_, 6, "iBlendWeights");
-    glBindAttribLocation(object_, 7, "iBlendIndices");
-    glBindAttribLocation(object_, 8, "iCubeTexCoord");
-    glBindAttribLocation(object_, 9, "iCubeTexCoord2");
-    #ifndef GL_ES_VERSION_2_0
-    glBindAttribLocation(object_, 10, "iInstanceMatrix1");
-    glBindAttribLocation(object_, 11, "iInstanceMatrix2");
-    glBindAttribLocation(object_, 12, "iInstanceMatrix3");
-    #endif
+    if (vertexShader_)
+    {
+        glBindAttribLocation(object_, 0, "iPos");
+        glBindAttribLocation(object_, 1, "iNormal");
+        glBindAttribLocation(object_, 2, "iColor");
+        glBindAttribLocation(object_, 3, "iTexCoord");
+        glBindAttribLocation(object_, 4, "iTexCoord2");
+        glBindAttribLocation(object_, 5, "iTangent");
+        glBindAttribLocation(object_, 6, "iBlendWeights");
+        glBindAttribLocation(object_, 7, "iBlendIndices");
+        glBindAttribLocation(object_, 8, "iCubeTexCoord");
+        glBindAttribLocation(object_, 9, "iCubeTexCoord2");
+        #ifndef GL_ES_VERSION_2_0
+        glBindAttribLocation(object_, 10, "iInstanceMatrix1");
+        glBindAttribLocation(object_, 11, "iInstanceMatrix2");
+        glBindAttribLocation(object_, 12, "iInstanceMatrix3");
+        #endif
+    }
     
-    glAttachShader(object_, vertexShader_->GetGPUObject());
-    glAttachShader(object_, pixelShader_->GetGPUObject());
+    if (vertexShader_)
+        glAttachShader(object_, vertexShader_->GetGPUObject());
+    if (hullShader_ && domainShader_)
+    {
+        glAttachShader(object_, hullShader_->GetGPUObject());
+        glAttachShader(object_, domainShader_->GetGPUObject());
+    }
+    if (geometryShader_)
+        glAttachShader(object_, geometryShader_->GetGPUObject());
+    if (pixelShader_)
+        glAttachShader(object_, pixelShader_->GetGPUObject());
+    if (computeShader_)
+        glAttachShader(object_, computeShader_->GetGPUObject());
+    
     glLinkProgram(object_);
     
     int linked, length;
@@ -211,9 +272,29 @@ ShaderVariation* ShaderProgram::GetVertexShader() const
     return vertexShader_;
 }
 
+ShaderVariation* ShaderProgram::GetHullShader() const
+{
+    return hullShader_;
+}
+
+ShaderVariation* ShaderProgram::GetDomainShader() const
+{
+    return domainShader_;
+}
+
+ShaderVariation* ShaderProgram::GetGeometryShader() const
+{
+    return geometryShader_;
+}
+
 ShaderVariation* ShaderProgram::GetPixelShader() const
 {
     return pixelShader_;
+}
+
+ShaderVariation* ShaderProgram::GetComputeShader() const
+{
+    return computeShader_;
 }
 
 bool ShaderProgram::HasParameter(StringHash param) const

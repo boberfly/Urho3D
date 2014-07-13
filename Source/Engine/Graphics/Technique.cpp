@@ -77,7 +77,9 @@ Pass::Pass(StringHash type) :
     shadersLoadedFrameNumber_(0),
     depthWrite_(true),
     alphaMask_(false),
-    isSM3_(false)
+    usesCompute_(false),
+//    isSM3_(false),
+    shaderModel_(2)
 {
     // Guess default lighting mode from pass name
     if (type == PASS_BASE || type == PASS_ALPHA || type == PASS_MATERIAL || type == PASS_DEFERRED)
@@ -115,14 +117,44 @@ void Pass::SetAlphaMask(bool enable)
     alphaMask_ = enable;
 }
 
-void Pass::SetIsSM3(bool enable)
+void Pass::SetUsesCompute(bool enable)
 {
-    isSM3_ = enable;
+    usesCompute_ = enable;
+}
+
+//void Pass::SetIsSM3(bool enable)
+//{
+//    isSM3_ = enable;
+//    if (enable)
+//        shaderModel_ = 3;
+//}
+
+void Pass::SetShaderModel(unsigned value)
+{
+    shaderModel_ = value;
 }
 
 void Pass::SetVertexShader(const String& name)
 {
     vertexShaderName_ = name;
+    ReleaseShaders();
+}
+
+void Pass::SetHullShader(const String& name)
+{
+    hullShaderName_ = name;
+    ReleaseShaders();
+}
+
+void Pass::SetDomainShader(const String& name)
+{
+    domainShaderName_ = name;
+    ReleaseShaders();
+}
+
+void Pass::SetGeometryShader(const String& name)
+{
+    geometryShaderName_ = name;
     ReleaseShaders();
 }
 
@@ -132,9 +164,33 @@ void Pass::SetPixelShader(const String& name)
     ReleaseShaders();
 }
 
+void Pass::SetComputeShader(const String& name)
+{
+    computeShaderName_ = name;
+    ReleaseShaders();
+}
+
 void Pass::SetVertexShaderDefines(const String& defines)
 {
     vertexShaderDefines_ = defines;
+    ReleaseShaders();
+}
+
+void Pass::SetHullShaderDefines(const String& defines)
+{
+    hullShaderDefines_ = defines;
+    ReleaseShaders();
+}
+
+void Pass::SetDomainShaderDefines(const String& defines)
+{
+    domainShaderDefines_ = defines;
+    ReleaseShaders();
+}
+
+void Pass::SetGeometryShaderDefines(const String& defines)
+{
+    geometryShaderDefines_ = defines;
     ReleaseShaders();
 }
 
@@ -144,10 +200,20 @@ void Pass::SetPixelShaderDefines(const String& defines)
     ReleaseShaders();
 }
 
+void Pass::SetComputeShaderDefines(const String& defines)
+{
+    computeShaderDefines_ = defines;
+    ReleaseShaders();
+}
+
 void Pass::ReleaseShaders()
 {
     vertexShaders_.Clear();
+    hullShaders_.Clear();
+    domainShaders_.Clear();
+    geometryShaders_.Clear();
     pixelShaders_.Clear();
+    computeShaders_.Clear();
 }
 
 void Pass::MarkShadersLoaded(unsigned frameNumber)
@@ -157,10 +223,14 @@ void Pass::MarkShadersLoaded(unsigned frameNumber)
 
 Technique::Technique(Context* context) :
     Resource(context),
-    isSM3_(false)
+    //isSM3_(false)
+    shaderModel_(2),
+    usesCompute_(false)
 {
     Graphics* graphics = GetSubsystem<Graphics>();
-    sm3Support_ = graphics ? graphics->GetSM3Support() : true;
+    //sm3Support_ = graphics ? graphics->GetSM3Support() : true;
+    smSupport_ = graphics->GetSMSupport();
+    computeSupport_ = graphics->GetComputeSupport();
 }
 
 Technique::~Technique()
@@ -185,17 +255,72 @@ bool Technique::Load(Deserializer& source)
     
     XMLElement rootElem = xml->GetRoot();
     if (rootElem.HasAttribute("sm3"))
-        isSM3_ = rootElem.GetBool("sm3");
-    
+        if (rootElem.GetBool("sm3"))
+            shaderModel_ = 3;
+    if (rootElem.HasAttribute("sm"))
+        shaderModel_ = rootElem.GetUInt("sm");
+/*
     String globalVS = rootElem.GetAttribute("vs");
     String globalPS = rootElem.GetAttribute("ps");
     String globalVSDefines = rootElem.GetAttribute("vsdefines");
     String globalPSDefines = rootElem.GetAttribute("psdefines");
+*/
+    String globalVS;
+    String globalVSDefines;
+    if (rootElem.HasAttribute("vs"))
+    {
+        globalVS = rootElem.GetAttribute("vs");
+        if (!globalVSDefines.Empty())
+            globalVSDefines += ' ';
+    }
+    String globalHS;
+    String globalHSDefines;
+    if (rootElem.HasAttribute("hs"))
+    {
+        globalHS = rootElem.GetAttribute("hs");
+        if (!globalHSDefines.Empty())
+            globalHSDefines += ' ';
+    }
+    String globalDS;
+    String globalDSDefines;
+    if (rootElem.HasAttribute("ds"))
+    {
+        globalDS = rootElem.GetAttribute("ds");
+        if (!globalDSDefines.Empty())
+            globalDSDefines += ' ';
+    }
+    String globalGS;
+    String globalGSDefines;
+    if (rootElem.HasAttribute("gs"))
+    {
+        globalGS = rootElem.GetAttribute("gs");
+        if (!globalGSDefines.Empty())
+            globalGSDefines += ' ';
+    }
+    String globalPS;
+    String globalPSDefines;
+    if (rootElem.HasAttribute("ps"))
+    {
+        globalPS = rootElem.GetAttribute("ps");
+        if (!globalPSDefines.Empty())
+            globalPSDefines += ' ';
+    }
+    String globalCS;
+    String globalCSDefines;
+    if (rootElem.HasAttribute("cs"))
+    {
+        usesCompute_ = true;
+        globalCS = rootElem.GetAttribute("cs");
+        if (!globalCSDefines.Empty())
+            globalCSDefines += ' ';
+    }
+    /*
     // End with space so that the pass-specific defines can be appended
     if (!globalVSDefines.Empty())
         globalVSDefines += ' ';
     if (!globalPSDefines.Empty())
         globalPSDefines += ' ';
+    */
     bool globalAlphaMask = false;
     if (rootElem.HasAttribute("alphamask"))
         globalAlphaMask = rootElem.GetBool("alphamask");
@@ -213,8 +338,11 @@ bool Technique::Load(Deserializer& source)
             ++numPasses;
             
             if (passElem.HasAttribute("sm3"))
-                newPass->SetIsSM3(passElem.GetBool("sm3"));
-            
+                //newPass->SetIsSM3(passElem.GetBool("sm3"));
+                if (passElem.GetBool("sm3"))
+                    newPass->SetShaderModel(3);
+            if (passElem.HasAttribute("sm"))
+                newPass->SetShaderModel(passElem.GetUInt("sm"));
             // Append global defines only when pass does not redefine the shader
             if (passElem.HasAttribute("vs"))
             {
@@ -226,6 +354,40 @@ bool Technique::Load(Deserializer& source)
                 newPass->SetVertexShader(globalVS);
                 newPass->SetVertexShaderDefines(globalVSDefines + passElem.GetAttribute("vsdefines"));
             }
+
+            if (passElem.HasAttribute("hs"))
+            {
+                newPass->SetHullShader(passElem.GetAttribute("hs"));
+                newPass->SetHullShaderDefines(passElem.GetAttribute("hsdefines"));
+            }
+            else
+            {
+                newPass->SetHullShader(globalHS);
+                newPass->SetHullShaderDefines(globalVSDefines + passElem.GetAttribute("hsdefines"));
+            }
+
+            if (passElem.HasAttribute("ds"))
+            {
+                newPass->SetDomainShader(passElem.GetAttribute("ds"));
+                newPass->SetDomainShaderDefines(passElem.GetAttribute("dsdefines"));
+            }
+            else
+            {
+                newPass->SetDomainShader(globalDS);
+                newPass->SetDomainShaderDefines(globalDSDefines + passElem.GetAttribute("dsdefines"));
+            }
+
+            if (passElem.HasAttribute("gs"))
+            {
+                newPass->SetGeometryShader(passElem.GetAttribute("gs"));
+                newPass->SetGeometryShaderDefines(passElem.GetAttribute("gsdefines"));
+            }
+            else
+            {
+                newPass->SetGeometryShader(globalGS);
+                newPass->SetGeometryShaderDefines(globalGSDefines + passElem.GetAttribute("gsdefines"));
+            }
+
             if (passElem.HasAttribute("ps"))
             {
                 newPass->SetPixelShader(passElem.GetAttribute("ps"));
@@ -235,6 +397,19 @@ bool Technique::Load(Deserializer& source)
             {
                 newPass->SetPixelShader(globalPS);
                 newPass->SetPixelShaderDefines(globalPSDefines + passElem.GetAttribute("psdefines"));
+            }
+
+            if (passElem.HasAttribute("cs"))
+            {
+                newPass->SetUsesCompute(true);
+                newPass->SetComputeShader(passElem.GetAttribute("cs"));
+                newPass->SetComputeShaderDefines(passElem.GetAttribute("csdefines"));
+            }
+            else
+            {
+                newPass->SetUsesCompute(true);
+                newPass->SetComputeShader(globalCS);
+                newPass->SetComputeShaderDefines(globalCSDefines + passElem.GetAttribute("csdefines"));
             }
             
             if (passElem.HasAttribute("lighting"))
@@ -278,9 +453,23 @@ bool Technique::Load(Deserializer& source)
     return true;
 }
 
+/*
 void Technique::SetIsSM3(bool enable)
 {
     isSM3_ = enable;
+}
+*/
+
+void Technique::SetShaderModel(unsigned value)
+{
+    shaderModel_ = value;
+//    if (value > 2)
+//        isSM3_ = true;
+}
+
+void Technique::SetUsesCompute(bool enable)
+{
+    usesCompute_ = enable;
 }
 
 void Technique::ReleaseShaders()

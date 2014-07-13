@@ -599,8 +599,12 @@ static void RegisterMaterial(asIScriptEngine* engine)
     engine->RegisterObjectMethod("Pass", "bool get_depthWrite() const", asMETHOD(Pass, GetDepthWrite), asCALL_THISCALL);
     engine->RegisterObjectMethod("Pass", "void set_alphaMask(bool)", asMETHOD(Pass, SetAlphaMask), asCALL_THISCALL);
     engine->RegisterObjectMethod("Pass", "bool get_alphaMask() const", asMETHOD(Pass, GetAlphaMask), asCALL_THISCALL);
-    engine->RegisterObjectMethod("Pass", "void set_sm3(bool)", asMETHOD(Technique, SetIsSM3), asCALL_THISCALL);
-    engine->RegisterObjectMethod("Pass", "bool get_sm3() const", asMETHOD(Technique, IsSM3), asCALL_THISCALL);
+    //engine->RegisterObjectMethod("Pass", "void set_sm3(bool)", asMETHOD(Technique, SetIsSM3), asCALL_THISCALL);
+    //engine->RegisterObjectMethod("Pass", "bool get_sm3() const", asMETHOD(Technique, IsSM3), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Pass", "void set_shaderModel(uint)", asMETHOD(Technique, SetShaderModel), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Pass", "uint get_shaderModel() const", asMETHOD(Technique, GetShaderModel), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Pass", "void set_usesCompute(bool)", asMETHOD(Technique, SetUsesCompute), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Pass", "bool get_usesCompute() const", asMETHOD(Technique, GetUsesCompute), asCALL_THISCALL);
     engine->RegisterObjectMethod("Pass", "void set_vertexShader(const String&in)", asMETHOD(Pass, SetVertexShader), asCALL_THISCALL);
     engine->RegisterObjectMethod("Pass", "const String& get_vertexShader() const", asMETHOD(Pass, GetVertexShader), asCALL_THISCALL);
     engine->RegisterObjectMethod("Pass", "void set_pixelShader(const String&in)", asMETHOD(Pass, SetPixelShader), asCALL_THISCALL);
@@ -614,8 +618,12 @@ static void RegisterMaterial(asIScriptEngine* engine)
     engine->RegisterObjectMethod("Technique", "Pass@+ CreatePass(StringHash)", asMETHOD(Technique, CreatePass), asCALL_THISCALL);
     engine->RegisterObjectMethod("Technique", "void RemovePass(StringHash)", asMETHOD(Technique, RemovePass), asCALL_THISCALL);
     engine->RegisterObjectMethod("Technique", "bool HasPass(StringHash) const", asMETHOD(Technique, HasPass), asCALL_THISCALL);
-    engine->RegisterObjectMethod("Technique", "void set_sm3(bool)", asMETHOD(Technique, SetIsSM3), asCALL_THISCALL);
-    engine->RegisterObjectMethod("Technique", "bool get_sm3() const", asMETHOD(Technique, IsSM3), asCALL_THISCALL);
+//    engine->RegisterObjectMethod("Technique", "void set_sm3(bool)", asMETHOD(Technique, SetIsSM3), asCALL_THISCALL);
+//    engine->RegisterObjectMethod("Technique", "bool get_sm3() const", asMETHOD(Technique, IsSM3), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Technique", "void set_shaderModel(uint)", asMETHOD(Technique, SetShaderModel), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Technique", "uint get_shaderModel() const", asMETHOD(Technique, GetShaderModel), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Technique", "void set_usesCompute(bool)", asMETHOD(Technique, SetUsesCompute), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Technique", "bool get_usesCompute() const", asMETHOD(Technique, GetUsesCompute), asCALL_THISCALL);
     engine->RegisterObjectMethod("Technique", "Pass@+ get_passes(StringHash)", asMETHOD(Technique, GetPass), asCALL_THISCALL);
     
     engine->RegisterObjectType("TechniqueEntry", sizeof(TechniqueEntry), asOBJ_VALUE | asOBJ_APP_CLASS_CD);
@@ -1300,7 +1308,8 @@ static void RegisterGraphics(asIScriptEngine* engine)
     engine->RegisterObjectMethod("Graphics", "bool get_deviceLost() const", asMETHOD(Graphics, IsDeviceLost), asCALL_THISCALL);
     engine->RegisterObjectMethod("Graphics", "uint get_numPrimitives() const", asMETHOD(Graphics, GetNumPrimitives), asCALL_THISCALL);
     engine->RegisterObjectMethod("Graphics", "uint get_numBatches() const", asMETHOD(Graphics, GetNumBatches), asCALL_THISCALL);
-    engine->RegisterObjectMethod("Graphics", "bool get_sm3Support() const", asMETHOD(Graphics, GetSM3Support), asCALL_THISCALL);
+//    engine->RegisterObjectMethod("Graphics", "bool get_sm3Support() const", asMETHOD(Graphics, GetSM3Support), asCALL_THISCALL);
+    engine->RegisterObjectMethod("Graphics", "uint get_smSupport() const", asMETHOD(Graphics, GetSMSupport), asCALL_THISCALL);
     engine->RegisterObjectMethod("Graphics", "bool get_instancingSupport() const", asMETHOD(Graphics, GetInstancingSupport), asCALL_THISCALL);
     engine->RegisterObjectMethod("Graphics", "bool get_lightPrepassSupport() const", asMETHOD(Graphics, GetLightPrepassSupport), asCALL_THISCALL);
     engine->RegisterObjectMethod("Graphics", "bool get_deferredSupport() const", asMETHOD(Graphics, GetDeferredSupport), asCALL_THISCALL);

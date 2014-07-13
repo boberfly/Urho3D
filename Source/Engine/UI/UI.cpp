@@ -739,7 +739,7 @@ void UI::Render(VertexBuffer* buffer, const PODVector<UIBatch>& batches, unsigne
                 ps = diffTexturePS;
         }
 
-        graphics_->SetShaders(vs, ps);
+        graphics_->SetShaders(vs, 0, 0, 0, ps, 0);
         if (graphics_->NeedParameterUpdate(SP_OBJECTTRANSFORM, this))
             graphics_->SetShaderParameter(VSP_MODEL, Matrix3x4::IDENTITY);
         if (graphics_->NeedParameterUpdate(SP_CAMERA, this))

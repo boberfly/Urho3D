@@ -51,6 +51,7 @@ class Vector4;
 class VertexBuffer;
 
 typedef HashMap<Pair<ShaderVariation*, ShaderVariation*>, SharedPtr<ShaderProgram> > ShaderProgramMap;
+//typedef HashMap<Vector<ShaderVariation*>, SharedPtr<ShaderProgram> > ShaderProgramMap;
 
 static const unsigned NUM_SCREEN_BUFFERS = 2;
 static const unsigned NUM_TEMP_MATRICES = 8;
@@ -131,8 +132,8 @@ public:
     bool SetVertexBuffers(const Vector<SharedPtr<VertexBuffer> >& buffers, const PODVector<unsigned>& elementMasks, unsigned instanceOffset = 0);
     /// Set index buffer.
     void SetIndexBuffer(IndexBuffer* buffer);
-    /// Set shaders.
-    void SetShaders(ShaderVariation* vs, ShaderVariation* ps);
+    /// Set shaders vertex, domain, hull, geometry, pixel & compute.
+    void SetShaders(ShaderVariation* vs, ShaderVariation* hs, ShaderVariation* ds, ShaderVariation* gs, ShaderVariation* ps, ShaderVariation* cs);
     /// Set shader float constants.
     void SetShaderParameter(StringHash param, const float* data, unsigned count);
     /// Set shader float constant.
@@ -272,8 +273,8 @@ public:
     unsigned GetShadowMapFormat() const { return shadowMapFormat_; }
     /// Return 24-bit shadow map depth texture format, or 0 if not supported.
     unsigned GetHiresShadowMapFormat() const { return hiresShadowMapFormat_; }
-    /// Return whether Shader Model 3 is supported. Has no meaning on OpenGL, so is assumed to be true.
-    bool GetSM3Support() const { return true; }
+    /// Return Shader Model supported.
+    unsigned GetSMSupport() const { return shaderModel_; }
     /// Return whether hardware instancing is supported.
     bool GetInstancingSupport() const { return instancingSupport_; }
     /// Return whether light pre-pass rendering is supported.
@@ -290,6 +291,8 @@ public:
     bool GetSRGBSupport() const { return sRGBSupport_; }
     /// Return whether sRGB conversion on rendertarget writing is supported.
     bool GetSRGBWriteSupport() const { return sRGBWriteSupport_; }
+    /// Return whether compute shader is supported.
+    bool GetComputeSupport() const { return computeSupport_; }
     /// Return supported fullscreen resolutions.
     PODVector<IntVector2> GetResolutions() const;
     /// Return supported multisampling levels.
@@ -308,8 +311,16 @@ public:
     IndexBuffer* GetIndexBuffer() const { return indexBuffer_; }
     /// Return vertex shader.
     ShaderVariation* GetVertexShader() const { return vertexShader_; }
+    /// Return hull shader.
+    ShaderVariation* GetHullShader() const { return hullShader_; }
+    /// Return domain shader.
+    ShaderVariation* GetDomainShader() const { return domainShader_; }
+    /// Return geometry shader.
+    ShaderVariation* GetGeometryShader() const { return geometryShader_; }
     /// Return pixel shader.
     ShaderVariation* GetPixelShader() const { return pixelShader_; }
+    /// Return compute shader.
+    ShaderVariation* GetComputeShader() const { return computeShader_; }
     /// Return shader program.
     ShaderProgram* GetShaderProgram() const { return shaderProgram_; }
     /// Return texture unit index by name.
@@ -376,6 +387,8 @@ public:
     bool GetForceSM2() const { return false; }
     /// Return the OpenGL version number.
     unsigned GetOpenGLVersion() const { return openglVersion_; }
+    /// Return the Shader Model support.
+    unsigned GetShaderModel() const { return shaderModel_; }
 
     /// Window was resized through user interaction. Called by Input subsystem.
     void WindowResized();
@@ -495,8 +508,12 @@ private:
     bool sRGBSupport_;
     /// sRGB conversion on write support flag.
     bool sRGBWriteSupport_;
+    /// Compute shader support flag.
+    bool computeSupport_;
     /// OpenGL version number.
     unsigned openglVersion_;
+    /// Shader Model support.
+    unsigned shaderModel_;
     /// Number of primitives this frame.
     unsigned numPrimitives_;
     /// Number of batches this frame.
@@ -521,8 +538,16 @@ private:
     IndexBuffer* indexBuffer_;
     /// Vertex shader in use.
     ShaderVariation* vertexShader_;
+    /// Hull shader in use.
+    ShaderVariation* hullShader_;
+    /// Domain shader in use.
+    ShaderVariation* domainShader_;
+    /// Geometry shader in use.
+    ShaderVariation* geometryShader_;
     /// Pixel shader in use.
     ShaderVariation* pixelShader_;
+    /// Compute shader in use.
+    ShaderVariation* computeShader_;
     /// Shader program in use.
     ShaderProgram* shaderProgram_;
     /// Linked shader programs.

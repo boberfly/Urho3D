@@ -1652,7 +1652,7 @@ void View::RenderQuad(RenderPathCommand& command)
         command.pixelShaderName_ = String::EMPTY;
     
     // Set shaders & shader parameters and textures
-    graphics_->SetShaders(vs, ps);
+    graphics_->SetShaders(vs, 0, 0, 0, ps, 0);
     
     const HashMap<StringHash, Variant>& parameters = command.shaderParameters_;
     for (HashMap<StringHash, Variant>::ConstIterator k = parameters.Begin(); k != parameters.End(); ++k)
@@ -1931,7 +1931,7 @@ void View::BlitFramebuffer(Texture2D* source, RenderSurface* destination, bool d
     graphics_->SetViewport(destRect);
     
     static const String shaderName("CopyFramebuffer");
-    graphics_->SetShaders(graphics_->GetShader(VS, shaderName), graphics_->GetShader(PS, shaderName));
+    graphics_->SetShaders(graphics_->GetShader(VS, shaderName), 0, 0, 0, graphics_->GetShader(PS, shaderName), 0);
     
     SetGBufferShaderParameters(srcSize, srcRect);
     
@@ -2604,7 +2604,7 @@ Technique* View::GetTechnique(Drawable* drawable, Material* material)
             const TechniqueEntry& entry = techniques[i];
             Technique* tech = entry.technique_;
 
-            if (!tech || (tech->IsSM3() && !graphics_->GetSM3Support()) || materialQuality_ < entry.qualityLevel_)
+            if (!tech || (tech->GetShaderModel() > graphics_->GetSMSupport()) || materialQuality_ < entry.qualityLevel_)
                 continue;
             if (lodDistance >= entry.lodDistance_)
                 return tech;
