@@ -56,8 +56,8 @@ private:
     /// XML file.
     XMLFile xmlFile_;
     /// Already encountered shader combinations, pointer version for fast queries.
-    //HashSet<Vector<ShaderVariation*> > usedPtrCombinations_;
-    HashSet<Pair<ShaderVariation*, ShaderVariation*> > usedPtrCombinations_;
+    HashSet<ShaderCombination> usedPtrCombinations_;
+    //HashSet<Pair<ShaderVariation*, ShaderVariation*> > usedPtrCombinations_;
     /// Already encountered shader combinations.
     HashSet<String> usedCombinations_;
 };

@@ -1319,7 +1319,9 @@ void Graphics::SetShaders(ShaderVariation* vs, ShaderVariation* hs, ShaderVariat
         pixelShader_ = ps;
         computeShader_ = cs;
         
-        Pair<ShaderVariation*, ShaderVariation*> combination(vs, ps);
+        ShaderCombination combination(vs, hs, ds, gs, ps, cs);
+
+        //Pair<ShaderVariation*, ShaderVariation*> combination(vs, ps);
         ShaderProgramMap::Iterator i = shaderPrograms_.Find(combination);
         
         if (i != shaderPrograms_.End())

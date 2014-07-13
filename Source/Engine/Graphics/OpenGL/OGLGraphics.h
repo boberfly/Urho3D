@@ -50,8 +50,41 @@ class Vector3;
 class Vector4;
 class VertexBuffer;
 
-typedef HashMap<Pair<ShaderVariation*, ShaderVariation*>, SharedPtr<ShaderProgram> > ShaderProgramMap;
-//typedef HashMap<Vector<ShaderVariation*>, SharedPtr<ShaderProgram> > ShaderProgramMap;
+//typedef HashMap<Pair<ShaderVariation*, ShaderVariation*>, SharedPtr<ShaderProgram> > ShaderProgramMap;
+struct ShaderCombination
+{
+    ShaderCombination()
+    {
+    }
+
+    ShaderCombination(ShaderVariation* vs, ShaderVariation* hs, ShaderVariation* ds,
+                     ShaderVariation* gs, ShaderVariation* ps, ShaderVariation* cs) :
+        vs_(vs),
+        hs_(hs),
+        ds_(ds),
+        gs_(gs),
+        ps_(ps),
+        cs_(cs)
+    {
+    }
+        ShaderVariation* vs_;
+        ShaderVariation* hs_;
+        ShaderVariation* ds_;
+        ShaderVariation* gs_;
+        ShaderVariation* ps_;
+        ShaderVariation* cs_;
+
+        bool operator == (const ShaderCombination& rhs) const { return vs_ == rhs.vs_ && hs_ == rhs.hs_ && ds_ == rhs.ds_ && gs_ == rhs.gs_ && ps_ == rhs.ps_ && cs_ == rhs.cs_; }
+        bool operator != (const ShaderCombination& rhs) const { return vs_ != rhs.vs_ && hs_ != rhs.hs_ && ds_ != rhs.ds_ && gs_ != rhs.gs_ && ps_ != rhs.ps_ && cs_ != rhs.cs_; }
+        unsigned long ToHash() const
+        {
+            return (unsigned long)vs_ + (unsigned long)hs_ +
+                   (unsigned long)ds_ + (unsigned long)gs_ +
+                   (unsigned long)ps_ + (unsigned long)cs_;
+        }
+};
+
+typedef HashMap<ShaderCombination, SharedPtr<ShaderProgram> > ShaderProgramMap;
 
 static const unsigned NUM_SCREEN_BUFFERS = 2;
 static const unsigned NUM_TEMP_MATRICES = 8;

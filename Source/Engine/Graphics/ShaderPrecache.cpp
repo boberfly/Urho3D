@@ -86,10 +86,11 @@ void ShaderPrecache::StoreShaders(ShaderVariation* vs, ShaderVariation* hs, Shad
         return;
     
     // Check for duplicate using pointers first (fast)
-    Pair<ShaderVariation*, ShaderVariation*> shaderPair = MakePair(vs, ps);
-    if (usedPtrCombinations_.Contains(shaderPair))
+    ShaderCombination combination(vs, hs, ds, gs, ps, cs);
+    //Pair<ShaderVariation*, ShaderVariation*> shaderPair = MakePair(vs, ps);
+    if (usedPtrCombinations_.Contains(combination))
         return;
-    usedPtrCombinations_.Insert(shaderPair);
+    usedPtrCombinations_.Insert(combination);
     
     String newCombination;
 
