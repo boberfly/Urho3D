@@ -203,16 +203,6 @@ void ShaderPrecache::LoadShaders(Graphics* graphics, Deserializer& source)
             shader = shader.GetNext("shader");
             continue;
         }
-
-        // Check for illegal variations on OpenGL ES and skip them
-        String vsDefines = shader.GetAttribute("vsdefines");
-        String psDefines = shader.GetAttribute("psdefines");
-
-        if (vsDefines.Contains("INSTANCED") || (psDefines.Contains("POINTLIGHT") && psDefines.Contains("SHADOW")))
-        {
-            shader = shader.GetNext("shader");
-            continue;
-        }
         #else
         unsigned sm = graphics->GetShaderModel();
         // Shader Model 3.0 just does vertex and pixel shaders
@@ -229,7 +219,6 @@ void ShaderPrecache::LoadShaders(Graphics* graphics, Deserializer& source)
         }
         #endif
 
-        // Check for illegal variations on OpenGL ES and skip them
         String vsDefines = shader.GetAttribute("vsdefines");
         String hsDefines = shader.GetAttribute("hsdefines");
         String dsDefines = shader.GetAttribute("dsdefines");
