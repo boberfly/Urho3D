@@ -45,6 +45,27 @@ enum CompressedFormat
     CF_PVRTC_RGBA_2BPP,
     CF_PVRTC_RGB_4BPP,
     CF_PVRTC_RGBA_4BPP,
+    CF_EAC_R11,
+    CF_EAC_R11_SIGNED,
+    CF_EAC_RG11,
+    CF_EAC_RG11_SIGNED,
+    CF_ETC2,
+    CF_ETC2_PUNCHTHROUGH_ALPHA,
+    CF_ETC2_ALPHA,
+    CF_ASTC_RGBA_4x4,
+    CF_ASTC_RGBA_5x4,
+    CF_ASTC_RGBA_5x5,
+    CF_ASTC_RGBA_6x5,
+    CF_ASTC_RGBA_6x6,
+    CF_ASTC_RGBA_8x5,
+    CF_ASTC_RGBA_8x6,
+    CF_ASTC_RGBA_8x8,
+    CF_ASTC_RGBA_10x5,
+    CF_ASTC_RGBA_10x6,
+    CF_ASTC_RGBA_10x8,
+    CF_ASTC_RGBA_10x10,
+    CF_ASTC_RGBA_12x10,
+    CF_ASTC_RGBA_12x12
 };
 
 /// Compressed image mip level.
@@ -188,6 +209,8 @@ public:
     SharedPtr<Image> GetNextSibling() const { return nextSibling_;  }
     /// Return image converted to 4-component (RGBA) to circumvent modern rendering API's not supporting e.g. the luminance-alpha format.
     SharedPtr<Image> ConvertToRGBA() const;
+    /// Return image converted to a compressed format for runtime transcoding from an uncompressed image.
+    SharedPtr<Image> ConvertToCompressedFormat(CompressedFormat format) const;
     /// Return a compressed mip level.
     CompressedLevel GetCompressedLevel(unsigned index) const;
     /// Return subimage from the image by the defined rect or null if failed. 3D images are not supported. You must free the subimage yourself.
@@ -196,6 +219,8 @@ public:
     SDL_Surface* GetSDLSurface(const IntRect& rect = IntRect::ZERO) const;
     /// Precalculate the mip levels. Used by asynchronous texture loading.
     void PrecalculateLevels();
+    /// Calculate compressed size.
+    unsigned CalculateCompressedSize(CompressedFormat format) const;
 
 private:
     /// Decode an image using stb_image.

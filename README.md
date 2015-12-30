@@ -110,6 +110,7 @@ Urho3D uses the following third-party libraries:
 - Civetweb (http://sourceforge.net/projects/civetweb/)
 - FreeType 2.5.0 (http://www.freetype.org/)
 - GLEW 1.9.0 (http://glew.sourceforge.net/)
+- ISPC Texcompress (https://software.intel.com/en-us/articles/fast-ispc-texture-compressor-update)
 - jo_jpeg 1.52 (http://www.jonolick.com/uploads/7/9/2/1/7921194/jo_jpeg.cpp)
 - kNet (https://github.com/juj/kNet)
 - libcpuid 0.2.0 (http://libcpuid.sourceforge.net/)

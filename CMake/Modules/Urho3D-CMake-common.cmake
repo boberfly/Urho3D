@@ -495,6 +495,11 @@ if (WIN32)
     endif ()
 endif ()
 
+if (URHO3D_ISPC_TEXCOMPRESS)
+    find_package (ISPC REQUIRED)
+    add_definitions( -DURHO3D_ISPC_TEXCOMPRESS)
+endif ()
+
 # Platform and compiler specific options
 if (URHO3D_C++11)
     add_definitions (-DURHO3D_CXX11)   # Note the define is NOT 'URHO3D_C++11'!
@@ -1679,6 +1684,52 @@ macro (install_header_files)
             endif ()
         endforeach ()
     endif ()
+endmacro ()
+
+# Macro for setting up ISPC
+# CMake variables:
+#  ISPC_FILES - list of ISPC files
+macro (setup_ispc_library)
+    foreach (ISPC_FILE ${ISPC_FILES})
+        get_filename_component (ISPC_BASE_FILE ${ISPC_FILE} NAME_WE)
+        if (WIN32)
+            set (OBJ_EXT "obj")
+        else ()
+            set (OBJ_EXT "o")
+        endif ()
+        set (ISPC_OBJ_FILE ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/ispc/${ISPC_BASE_FILE}.${OBJ_EXT})
+        set (ISPC_H_FILE ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/ispc/include/${ISPC_BASE_FILE}_ispc.h)
+        if (URHO3D_64BIT AND NOT ARM)
+            set(ISPC_ARCH "x86-64")
+        elseif (ARM)
+            set(ISPC_ARCH "arm")
+        else ()
+            set(ISPC_ARCH "x86")
+        endif ()
+        if (URHO3D_SSE)
+            set(ISPC_TARGET "sse2,sse4,avx,avx2")
+        elseif (URHO3D_NEON)
+            set(ISPC_TARGET "neon")
+        endif ()
+        if (CMAKE_BUILD_TYPE STREQUAL RelWithDebugInfo)
+            set(ISPC_OPT "--opt=fast-math")
+        elseif (CMAKE_BUILD_TYPE STREQUAL Debug)
+            set(ISPC_OPT "-O0 --wno-perf")
+        else ()
+            set(ISPC_OPT "-O3 --opt=fast-math" "--opt=disable-assertions")
+        endif ()
+        add_custom_command (OUTPUT ${ISPC_OBJ_FILE} 
+                            COMMAND ${ISPC_BIN} ${ISPC_OPT} ${ISPC_FILE} -o ${ISPC_OBJ_FILE} -h ${ISPC_H_FILE} --target=${ISPC_TARGET} --arch=${ISPC_ARCH}
+                            IMPLICIT_DEPENDS C ${ISPC_FILE}
+                            DEPENDS ${ISPC_FILE}
+                            MAIN_DEPENDENCY ${ISPC_FILE})
+        set_source_files_properties (${ISPC_OBJ_FILE} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
+        set_source_files_properties (${ISPC_H_FILE} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
+        set (ISPC_INCLUDES ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/ispc/include)
+        set (ISPC_LIBS ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/ispc)
+        list (APPEND INCLUDE_DIRS ${ISPC_INCLUDES})
+        list (APPEND LIBS ${ISPC_LIBS})
+    endforeach ()
 endmacro ()
 
 # Set common project structure for some platforms

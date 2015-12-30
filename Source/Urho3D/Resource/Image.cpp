@@ -28,6 +28,9 @@
 #include "../IO/FileSystem.h"
 #include "../IO/Log.h"
 #include "../Resource/Decompress.h"
+#ifdef URHO3D_ISPC_TEXCOMP
+#include "../Resource/Compress.h"
+#endif
 
 #include <JO/jo_jpeg.h>
 #include <SDL/SDL_surface.h>
@@ -600,6 +603,114 @@ bool Image::BeginLoad(Deserializer& source)
 
         case 0x8c03:
             compressedFormat_ = CF_PVRTC_RGBA_2BPP;
+            components_ = 4;
+            break;
+
+        case 0x9270:
+            compressedFormat_ = CF_EAC_R11;
+            components_ = 1;
+            break;
+
+        case 0x9271:
+            compressedFormat_ = CF_EAC_R11_SIGNED;
+            components_ = 1;
+            break;
+
+        case 0x9272:
+            compressedFormat_ = CF_EAC_RG11;
+            components_ = 2;
+            break;
+
+        case 0x9273:
+            compressedFormat_ = CF_EAC_RG11_SIGNED;
+            components_ = 2;
+            break;
+
+        case 0x9274:
+        case 0x9275:
+            compressedFormat_ = CF_ETC2;
+            components_ = 3;
+            break;
+
+        case 0x9276:
+        case 0x9277:
+            compressedFormat_ = CF_ETC2_PUNCHTHROUGH_ALPHA;
+            components_ = 4;
+            break;
+
+        case 0x9278:
+        case 0x9279:
+            compressedFormat_ = CF_ETC2_ALPHA;
+            components_ = 4;
+            break;
+
+        case 0x93B0:
+            compressedFormat_ = CF_ASTC_RGBA_4x4;
+            components_ = 4;
+            break;
+
+        case 0x93B1:
+            compressedFormat_ = CF_ASTC_RGBA_5x4;
+            components_ = 4;
+            break;
+
+        case 0x93B2:
+            compressedFormat_ = CF_ASTC_RGBA_5x5;
+            components_ = 4;
+            break;
+
+        case 0x93B3:
+            compressedFormat_ = CF_ASTC_RGBA_6x5;
+            components_ = 4;
+            break;
+
+        case 0x93B4:
+            compressedFormat_ = CF_ASTC_RGBA_6x6;
+            components_ = 4;
+            break;
+
+        case 0x93B5:
+            compressedFormat_ = CF_ASTC_RGBA_8x5;
+            components_ = 4;
+            break;
+
+        case 0x93B6:
+            compressedFormat_ = CF_ASTC_RGBA_8x6;
+            components_ = 4;
+            break;
+
+        case 0x93B7:
+            compressedFormat_ = CF_ASTC_RGBA_8x8;
+            components_ = 4;
+            break;
+
+        case 0x93B8:
+            compressedFormat_ = CF_ASTC_RGBA_10x5;
+            components_ = 4;
+            break;
+
+        case 0x93B9:
+            compressedFormat_ = CF_ASTC_RGBA_10x6;
+            components_ = 4;
+            break;
+
+        case 0x93BA:
+            compressedFormat_ = CF_ASTC_RGBA_10x8;
+            components_ = 4;
+            break;
+
+        case 0x93BB:
+            compressedFormat_ = CF_ASTC_RGBA_10x10;
+            components_ = 4;
+            break;
+
+        case 0x93BC:
+            compressedFormat_ = CF_ASTC_RGBA_12x10;
+            components_ = 4;
+            break;
+
+        case 0x93BD:
+            compressedFormat_ = CF_ASTC_RGBA_12x12;
             components_ = 4;
             break;
 
@@ -1699,6 +1810,76 @@ SharedPtr<Image> Image::ConvertToRGBA() const
     return ret;
 }
 
+SharedPtr<Image> Image::ConvertToCompressedFormat(CompressedFormat format) const
+{
+#ifdef URHO3D_ISPC_TEXCOMP
+    //TODO: Support arrays and mipmaps
+    if (IsCompressed())
+    {
+        URHO3D_LOGERROR("Can not convert an already compressed image");
+        return SharedPtr<Image>();
+    }
+    if (components_ < 3 || components_ > 4)
+    {
+        URHO3D_LOGERROR("Illegal number of image components for conversion to a compressed format");
+        return SharedPtr<Image>();
+    }
+    if (!data_)
+    {
+        URHO3D_LOGERROR("Can not convert image without data to a compressed format");
+        return SharedPtr<Image>();
+    }
+
+    SharedPtr<Image> ret(new Image(context_));
+    unsigned dataSize = CalculateCompressedSize(format);
+
+    if (!dataSize)
+    {
+        URHO3D_LOGERROR("Can not convert image, unsupported compressed format");
+        return SharedPtr<Image>();
+    }
+
+    ret->data_ = new unsigned char[dataSize];
+    ret->width_ = width_;
+    ret->height_ = height_;
+    ret->numCompressedLevels_ = 1;
+    ret->compressedFormat_ = format;
+
+    switch (format)
+    {
+        case CF_DXT1:
+            ret->components_ = 3;
+            CompressImageDXT(ret->GetData(), data_.Get(), width_, height_, components_, format);
+            break;
+        case CF_DXT5:
+            ret->components_ = 4;
+            CompressImageDXT(ret->GetData(), data_.Get(), width_, height_, components_, format);
+            break;
+        case CF_ETC1:
+            ret->components_ = 3;
+            CompressImageETC(ret->GetData(), data_.Get(), width_, height_, components_);
+            break;
+        case CF_ASTC_RGBA_4x4:
+        case CF_ASTC_RGBA_5x4:
+        case CF_ASTC_RGBA_5x5:
+        case CF_ASTC_RGBA_6x5:
+        case CF_ASTC_RGBA_6x6:
+        case CF_ASTC_RGBA_8x5:
+        case CF_ASTC_RGBA_8x6:
+        case CF_ASTC_RGBA_8x8:
+            ret->components_ = 4;
+            CompressImageASTC(ret->GetData(), data_.Get(), width_, height_, components_, format);
+            break;
+    }
+    ret->SetMemoryUse(dataSize);
+
+    return ret;
+#else
+    URHO3D_LOGERROR("Texture compression is not supported");
+    return SharedPtr<Image>();
+#endif
+}
+
 CompressedLevel Image::GetCompressedLevel(unsigned index) const
 {
     CompressedLevel level;
@@ -2027,6 +2208,86 @@ void Image::PrecalculateLevels()
             current = current->nextLevel_;
         }
     }
+}
+
+unsigned Image::CalculateCompressedSize(CompressedFormat format)
+{
+    unsigned blockWidth = 0;
+    unsigned blockHeight = 0;
+    unsigned blockSize = 0;
+    switch (format)
+    {
+        case CF_DXT1:
+            blockWidth = 4;
+            blockHeight = 4;
+            blockSize = 8;
+            break;
+
+        case CF_DXT5:
+            blockWidth = 4;
+            blockHeight = 4;
+            blockSize = 16;
+            break;
+
+        case CF_ETC1:
+            blockWidth = 4;
+            blockHeight = 4;
+            blockSize = 8;
+            break;
+
+        case CF_ASTC_RGBA_4x4:
+            blockWidth = 4;
+            blockHeight = 4;
+            blockSize = 16;
+            break;
+
+        case CF_ASTC_RGBA_5x4:
+            blockWidth = 5;
+            blockHeight = 4;
+            blockSize = 16;
+            break;
+
+        case CF_ASTC_RGBA_5x5:
+            blockWidth = 5;
+            blockHeight = 5;
+            blockSize = 16;
+            break;
+
+        case CF_ASTC_RGBA_6x5:
+            blockWidth = 6;
+            blockHeight = 5;
+            blockSize = 16;
+            break;
+
+        case CF_ASTC_RGBA_6x6:
+            blockWidth = 6;
+            blockHeight = 6;
+            blockSize = 16;
+            break;
+
+        case CF_ASTC_RGBA_8x5:
+            blockWidth = 8;
+            blockHeight = 5;
+            blockSize = 16;
+            break;
+
+        case CF_ASTC_RGBA_8x6:
+            blockWidth = 8;
+            blockHeight = 6;
+            blockSize = 16;
+            break;
+
+        case CF_ASTC_RGBA_8x8:
+            blockWidth = 8;
+            blockHeight = 8;
+            blockSize = 16;
+            break;
+
+        default:
+            break;
+    }
+
+    return (unsigned)(ceilf(width_ / blockWidth) * ceilf(height_ / blockHeight) * blockSize);
 }
 
 unsigned char* Image::GetImageData(Deserializer& source, int& width, int& height, unsigned& components)
