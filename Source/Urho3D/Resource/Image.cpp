@@ -2210,7 +2210,7 @@ void Image::PrecalculateLevels()
     }
 }
 
-unsigned Image::CalculateCompressedSize(CompressedFormat format)
+unsigned Image::CalculateCompressedSize(CompressedFormat format) const
 {
     unsigned blockWidth = 0;
     unsigned blockHeight = 0;

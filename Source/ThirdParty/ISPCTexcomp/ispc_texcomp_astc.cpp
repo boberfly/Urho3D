@@ -36,6 +36,8 @@
 #include <cassert>
 #include <algorithm>
 #include <vector>
+// Modified by Alex Fuller for Urho3D
+#include <string.h>
 
 void GetProfile_astc_fast(astc_enc_settings* settings, int block_width, int block_height)
 {

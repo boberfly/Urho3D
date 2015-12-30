@@ -26,7 +26,7 @@
 
 #include "../Resource/Compress.h"
 
-#include "<ISPCTexcomp/ispc_texcomp.h>"
+#include <ISPCTexcomp/ispc_texcomp.h>
 
 
 namespace Urho3D
@@ -44,11 +44,11 @@ void CompressImageDXT(void* dest, const void* src, int width, int height, int st
     switch(format)
     {
         case CF_DXT1:
-            CompressBlocksBC1(surf, (uint8_t*)dest);
+            CompressBlocksBC1(&surf, (uint8_t*)dest);
             break;
 
         case CF_DXT5:
-            CompressBlocksBC3(surf, (uint8_t*)dest);
+            CompressBlocksBC3(&surf, (uint8_t*)dest);
             break;
 
         default:
@@ -65,11 +65,11 @@ void CompressImageETC(void* dest, const void* src, int width, int height, int st
     surf.height = (uint32_t)height;
     surf.stride = (uint32_t)stride;
 
-    astc_enc_settings settings;
+    etc_enc_settings settings;
     memset(&settings, 0, sizeof settings);
-    settings.fastSkipThreshold = 6;
+    settings.fastSkipTreshold = 6;
 
-    CompressBlocksETC1(surf, (uint8_t*)dest, settings);
+    CompressBlocksETC1(&surf, (uint8_t*)dest, &settings);
 }
 
 void CompressImageASTC(void* dest, const void* src, int width, int height, int stride, CompressedFormat format)
@@ -131,10 +131,10 @@ void CompressImageASTC(void* dest, const void* src, int width, int height, int s
             settings.block_height = 4;
             break;
     }
-    settings.fastSkipThreshold = 5;
+    settings.fastSkipTreshold = 5;
     settings.refineIterations = 2;
 
-    CompressBlocksASTC(surf, (uint8_t*)dest, settings);
+    CompressBlocksASTC(&surf, (uint8_t*)dest, &settings);
 }
 
 }

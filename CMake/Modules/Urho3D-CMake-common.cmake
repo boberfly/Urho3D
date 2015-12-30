@@ -498,6 +498,7 @@ endif ()
 if (URHO3D_ISPC_TEXCOMP)
     find_package (ISPC REQUIRED)
     add_definitions( -DURHO3D_ISPC_TEXCOMP)
+    set (URHO3D_C++11 1)
 endif ()
 
 # Platform and compiler specific options
@@ -985,7 +986,7 @@ endmacro ()
 #  TARGET_PROPERTIES - list of target properties
 macro (setup_library)
     check_source_files ()
-    add_library (${TARGET_NAME} ${ARGN} ${SOURCE_FILES})
+    add_library (${TARGET_NAME} ${ARGN} ${SOURCE_FILES} ${OBJECT_FILES})
     setup_target ()
 
     # Setup the compiler flags for building shared library
@@ -1693,42 +1694,50 @@ macro (setup_ispc_library)
     foreach (ISPC_FILE ${ISPC_FILES})
         get_filename_component (ISPC_BASE_FILE ${ISPC_FILE} NAME_WE)
         if (WIN32)
-            set (OBJ_EXT "obj")
+            set (OBJ_EXT obj)
         else ()
-            set (OBJ_EXT "o")
+            set (OBJ_EXT o)
         endif ()
-        set (ISPC_OBJ_FILE ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/ispc/${ISPC_BASE_FILE}.${OBJ_EXT})
-        set (ISPC_H_FILE ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/ispc/include/${ISPC_BASE_FILE}_ispc.h)
+        set(ISPC_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/ispc)
+        file(MAKE_DIRECTORY ${ISPC_OUTPUT_DIR}/include)
+        set (ISPC_OBJ_FILE ${ISPC_OUTPUT_DIR}/${ISPC_BASE_FILE}.${OBJ_EXT})
+        set (ISPC_H_FILE ${ISPC_OUTPUT_DIR}/include/${ISPC_BASE_FILE}_ispc.h)
         if (URHO3D_64BIT AND NOT ARM)
-            set(ISPC_ARCH "x86-64")
+            set(ISPC_ARCH x86-64)
         elseif (ARM)
-            set(ISPC_ARCH "arm")
+            set(ISPC_ARCH arm)
         else ()
-            set(ISPC_ARCH "x86")
+            set(ISPC_ARCH x86)
         endif ()
         if (URHO3D_SSE)
-            set(ISPC_TARGET "sse2,sse4,avx,avx2")
+            set(ISPC_TARGET sse2,sse4,avx,avx2)
+            set(ISPC_OBJ_FILES ${ISPC_OUTPUT_DIR}/${ISPC_BASE_FILE}.${OBJ_EXT}
+                               ${ISPC_OUTPUT_DIR}/${ISPC_BASE_FILE}_sse2.${OBJ_EXT}
+                               ${ISPC_OUTPUT_DIR}/${ISPC_BASE_FILE}_sse4.${OBJ_EXT}
+                               ${ISPC_OUTPUT_DIR}/${ISPC_BASE_FILE}_avx.${OBJ_EXT}
+                               ${ISPC_OUTPUT_DIR}/${ISPC_BASE_FILE}_avx2.${OBJ_EXT})
         elseif (URHO3D_NEON)
-            set(ISPC_TARGET "neon")
+            set(ISPC_TARGET neon)
+            set(ISPC_OBJ_FILES ${ISPC_OUTPUT_DIR}/${ISPC_BASE_FILE}.${OBJ_EXT}
+                               ${ISPC_OUTPUT_DIR}/${ISPC_BASE_FILE}_neon.${OBJ_EXT})
         endif ()
         if (CMAKE_BUILD_TYPE STREQUAL RelWithDebugInfo)
-            set(ISPC_OPT "--opt=fast-math")
+            set(ISPC_OPT --opt=fast-math)
         elseif (CMAKE_BUILD_TYPE STREQUAL Debug)
-            set(ISPC_OPT "-O0 --wno-perf")
+            set(ISPC_OPT -O0 --wno-perf)
         else ()
-            set(ISPC_OPT "-O3 --opt=fast-math" "--opt=disable-assertions")
+            set(ISPC_OPT -O3 --opt=fast-math --opt=disable-assertions)
         endif ()
-        add_custom_command (OUTPUT ${ISPC_OBJ_FILE} 
-                            COMMAND ${ISPC_BIN} ${ISPC_OPT} ${ISPC_FILE} -o ${ISPC_OBJ_FILE} -h ${ISPC_H_FILE} --target=${ISPC_TARGET} --arch=${ISPC_ARCH}
+        add_custom_command (OUTPUT ${ISPC_OBJ_FILE} ${ISPC_H_FILE}
+                            COMMAND ${ISPC_BIN} ${ISPC_FILE} ${ISPC_OPT} -o ${ISPC_OBJ_FILE} -h ${ISPC_H_FILE} --target=${ISPC_TARGET} --arch=${ISPC_ARCH}
                             IMPLICIT_DEPENDS C ${ISPC_FILE}
                             DEPENDS ${ISPC_FILE}
                             MAIN_DEPENDENCY ${ISPC_FILE})
-        set_source_files_properties (${ISPC_OBJ_FILE} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
-        set_source_files_properties (${ISPC_H_FILE} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
-        set (ISPC_INCLUDES ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/ispc/include)
-        set (ISPC_LIBS ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/ispc)
+        set_property(SOURCE ${SOURCE_FILES} APPEND PROPERTY OBJECT_DEPENDS ${ISPC_OBJ_FILES})
+        set_source_files_properties (${ISPC_OBJ_FILES} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
+        set (ISPC_INCLUDES ${ISPC_OUTPUT_DIR}/include)
+        list (APPEND SOURCE_FILES ${ISPC_OBJ_FILES})
         list (APPEND INCLUDE_DIRS ${ISPC_INCLUDES})
-        list (APPEND LIBS ${ISPC_LIBS})
     endforeach ()
 endmacro ()
 
