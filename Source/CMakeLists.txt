@@ -98,7 +98,7 @@ if (URHO3D_PHYSICS)
     add_subdirectory (ThirdParty/Bullet)
 endif ()
 
-if (URHO3D_ISPC_TEXCOMPRESS)
+if (URHO3D_ISPC_TEXCOMP)
     add_subdirectory (ThirdParty/ISPCTexcomp)
 endif ()
 

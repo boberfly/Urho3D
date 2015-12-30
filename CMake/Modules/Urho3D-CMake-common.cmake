@@ -495,9 +495,9 @@ if (WIN32)
     endif ()
 endif ()
 
-if (URHO3D_ISPC_TEXCOMPRESS)
+if (URHO3D_ISPC_TEXCOMP)
     find_package (ISPC REQUIRED)
-    add_definitions( -DURHO3D_ISPC_TEXCOMPRESS)
+    add_definitions( -DURHO3D_ISPC_TEXCOMP)
 endif ()
 
 # Platform and compiler specific options
