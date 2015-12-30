@@ -37,9 +37,9 @@ void CompressImageDXT(void* dest, const void* src, int width, int height, int st
     rgba_surface surf;
     memset(&surf, 0, sizeof surf);
     surf.ptr = (uint8_t*)src;
-    surf.width = (uint32_t)width;
-    surf.height = (uint32_t)height;
-    surf.stride = (uint32_t)stride;
+    surf.width = width;
+    surf.height = height;
+    surf.stride = stride;
 
     switch(format)
     {
@@ -61,9 +61,9 @@ void CompressImageETC(void* dest, const void* src, int width, int height, int st
     rgba_surface surf;
     memset(&surf, 0, sizeof surf);
     surf.ptr = (uint8_t*)src;
-    surf.width = (uint32_t)width;
-    surf.height = (uint32_t)height;
-    surf.stride = (uint32_t)stride;
+    surf.width = width;
+    surf.height = height;
+    surf.stride = stride;
 
     etc_enc_settings settings;
     memset(&settings, 0, sizeof settings);
@@ -77,9 +77,9 @@ void CompressImageASTC(void* dest, const void* src, int width, int height, int s
     rgba_surface surf;
     memset(&surf, 0, sizeof surf);
     surf.ptr = (uint8_t*)src;
-    surf.width = (uint32_t)width;
-    surf.height = (uint32_t)height;
-    surf.stride = (uint32_t)stride;
+    surf.width = width;
+    surf.height = height;
+    surf.stride = stride;
 
     astc_enc_settings settings;
     memset(&settings, 0, sizeof settings);

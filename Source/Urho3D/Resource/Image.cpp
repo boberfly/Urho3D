@@ -868,8 +868,8 @@ bool Image::Save(Serializer& dest) const
 
     if (IsCompressed())
     {
-        URHO3D_LOGERROR("Can not save compressed image " + GetName());
-        return false;
+        bool success = dest.Write(data_.Get(), CalculateCompressedSize(compressedFormat_)) == CalculateCompressedSize(compressedFormat_);
+        return success;
     }
 
     if (!data_)

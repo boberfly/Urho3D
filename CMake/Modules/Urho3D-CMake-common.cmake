@@ -986,7 +986,7 @@ endmacro ()
 #  TARGET_PROPERTIES - list of target properties
 macro (setup_library)
     check_source_files ()
-    add_library (${TARGET_NAME} ${ARGN} ${SOURCE_FILES} ${OBJECT_FILES})
+    add_library (${TARGET_NAME} ${ARGN} ${SOURCE_FILES})
     setup_target ()
 
     # Setup the compiler flags for building shared library
@@ -1728,7 +1728,7 @@ macro (setup_ispc_library)
         else ()
             set(ISPC_OPT -O3 --opt=fast-math --opt=disable-assertions)
         endif ()
-        add_custom_command (OUTPUT ${ISPC_OBJ_FILE} ${ISPC_H_FILE}
+        add_custom_command (OUTPUT ISPC: ${ISPC_BASE_FILE}.ispc
                             COMMAND ${ISPC_BIN} ${ISPC_FILE} ${ISPC_OPT} -o ${ISPC_OBJ_FILE} -h ${ISPC_H_FILE} --target=${ISPC_TARGET} --arch=${ISPC_ARCH}
                             IMPLICIT_DEPENDS C ${ISPC_FILE}
                             DEPENDS ${ISPC_FILE}
